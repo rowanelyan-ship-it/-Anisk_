@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import {
   Home as HomeIcon, BookOpen, Sparkles, Settings as SettingsIcon, Compass, Moon, Sun, Laptop,
   ChevronRight, ChevronLeft, Play, Pause, SkipBack, SkipForward, Volume2, Repeat,
   Mic, X, Check, Circle, CheckCircle2, Bookmark, HandHeart, GraduationCap, Flame,
-  Target, User, ListMusic, Gauge, Sunrise, Sunset, Star, ArrowLeft, ArrowRight,
-  ChevronDown, Info, Youtube, Clock, Languages, MapPin, Music, EyeOff
+  Target, User, ListMusic, Gauge, Sunrise, Sunset, Star, Heart, Brain, RotateCcw, Pin, ArrowLeft, ArrowRight,
+  ChevronDown, Info, Youtube, Clock, Languages, MapPin, Music, EyeOff, Download, BookMarked
 } from "lucide-react";
 
 /* =========================================================================
@@ -53,7 +53,7 @@ if (typeof window !== "undefined" && !window.storage) {
   };
 }
 
-const FONTS_LINK = "https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@400;500;700&family=Cairo:wght@300;400;500;600;700&family=Amiri:ital@0;1&display=swap";
+const FONTS_LINK = "https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@400;500;700&family=Cairo:wght@300;400;500;600;700&family=Amiri:ital,wght@0,400;0,700;1,400&family=Amiri+Quran:wght@400&display=swap";
 
 // Rich, sophisticated accent palette for Home's category cards — distinct
 // from the light-mode theme presets below. Muted/soft tones, no neon.
@@ -208,15 +208,39 @@ const LIGHT_PRESETS = {
   },
 };
 
-const DARK_TOKENS = {
-  bg: "#14170F", bgAlt: "#1B1F15", surface: "#1D2117", surfaceAlt: "#242A1D", border: "rgba(233,224,199,0.10)",
-  text: "#F1ECDD", textDim: "#A8A28E", primary: "#9DB08C", primaryDim: "#7E9270", onPrimary: "#14170F",
-  secondary: "#5F7259", accent: "#C9A66B", accentSoft: "rgba(201,166,107,0.16)", danger: "#D08267",
-  shadow: "0 10px 30px rgba(0,0,0,0.35)",
+const DARK_PRESETS = {
+  classic: {
+    label: "أخضر", swatch: ["#14170F", "#9DB08C"],
+    bg: "#14170F", bgAlt: "#1B1F15", surface: "#1D2117", surfaceAlt: "#242A1D", border: "rgba(233,224,199,0.10)",
+    text: "#F1ECDD", textDim: "#A8A28E", primary: "#9DB08C", primaryDim: "#7E9270", onPrimary: "#14170F",
+    secondary: "#5F7259", accent: "#C9A66B", accentSoft: "rgba(201,166,107,0.16)", danger: "#D08267",
+    shadow: "0 10px 30px rgba(0,0,0,0.35)",
+  },
+  pink: {
+    label: "وردي", swatch: ["#1A1114", "#D98CA6"],
+    bg: "#1A1114", bgAlt: "#231619", surface: "#251519", surfaceAlt: "#2C1A1F", border: "rgba(255,200,215,0.10)",
+    text: "#F5E4E9", textDim: "#B08D96", primary: "#D98CA6", primaryDim: "#C9698A", onPrimary: "#1A1114",
+    secondary: "#8A5566", accent: "#E3A6BC", accentSoft: "rgba(227,166,188,0.16)", danger: "#D08267",
+    shadow: "0 10px 30px rgba(0,0,0,0.35)",
+  },
+  brown: {
+    label: "بني", swatch: ["#17130E", "#B08D57"],
+    bg: "#17130E", bgAlt: "#1E1913", surface: "#201B14", surfaceAlt: "#28221A", border: "rgba(230,210,180,0.10)",
+    text: "#EFE6D8", textDim: "#A89A82", primary: "#B08D57", primaryDim: "#96773F", onPrimary: "#17130E",
+    secondary: "#6B5A3D", accent: "#D9A63E", accentSoft: "rgba(217,166,62,0.16)", danger: "#D08267",
+    shadow: "0 10px 30px rgba(0,0,0,0.35)",
+  },
+  yellow: {
+    label: "أصفر", swatch: ["#171408", "#C99A2E"],
+    bg: "#171408", bgAlt: "#1E1A0C", surface: "#211D0E", surfaceAlt: "#282311", border: "rgba(240,220,150,0.10)",
+    text: "#F5EFD6", textDim: "#B0A578", primary: "#C99A2E", primaryDim: "#A87F22", onPrimary: "#171408",
+    secondary: "#7A6528", accent: "#E3C674", accentSoft: "rgba(227,198,116,0.16)", danger: "#D08267",
+    shadow: "0 10px 30px rgba(0,0,0,0.35)",
+  },
 };
 
-function getTokens(resolvedMode, lightPresetId) {
-  if (resolvedMode === "dark") return DARK_TOKENS;
+function getTokens(resolvedMode, lightPresetId, darkPresetId) {
+  if (resolvedMode === "dark") return DARK_PRESETS[darkPresetId] || DARK_PRESETS.classic;
   return LIGHT_PRESETS[lightPresetId] || LIGHT_PRESETS.classic;
 }
 
@@ -301,7 +325,363 @@ function randomWisdomVerse() {
 }
 
 // توليد بطاقة مشاركة للآية كصورة PNG عبر Canvas — بدون أي اعتماد خارجي، ورسم محلي بالكامل
-function generateVerseCard(verse, themeTokens) {
+function toArabicNumerals(n) {
+  const map = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+  return String(n).replace(/[0-9]/g, (d) => map[Number(d)]);
+}
+
+// بطاقة آية بتصميم أنيق يحاكي صفحة مصحف مذهّبة: إطار زخرفي، عنوان السورة في
+// إطار مذهّب، وشارة دائرية لرقم الآية، مع توقيع أنيسك أسفل الصورة. الارتفاع
+// يتكيّف تلقائيًا حسب طول الآية بدل مساحة فاضية زيادة للآيات القصيرة.
+function generateVerseCard(verse) {
+  return new Promise(async (resolve) => {
+    try { await document.fonts.load('54px "Amiri Quran"'); await document.fonts.ready; } catch { /* تجاهل لو مش مدعوم */ }
+
+    const gold = "#B08D2F";
+    const goldDark = "#8C6D1F";
+    const ink = "#231A0E";
+    const W = 1080;
+
+    const measure = document.createElement("canvas").getContext("2d");
+    measure.font = '54px "Amiri Quran", serif';
+    const maxWidth = W - 260;
+    const words = verse.text.split(" ");
+    const lines = [];
+    let line = "";
+    words.forEach((w) => {
+      const test = line ? line + " " + w : w;
+      if (measure.measureText(test).width > maxWidth && line) { lines.push(line); line = w; }
+      else line = test;
+    });
+    if (line) lines.push(line);
+
+    const lineHeight = 92;
+    const textBlockHeight = lines.length * lineHeight;
+    const topArea = 230;
+    const bottomArea = 190;
+    const H = Math.max(620, topArea + textBlockHeight + bottomArea + 80);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#FBF3E3");
+    bg.addColorStop(1, "#F3E4C6");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    function roundRectPath(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 4;
+    roundRectPath(40, 40, W - 80, H - 80, 22);
+    ctx.stroke();
+    ctx.lineWidth = 1.5;
+    roundRectPath(54, 54, W - 108, H - 108, 16);
+    ctx.stroke();
+
+    function cornerFlourish(cx, cy, flipX, flipY) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+      ctx.strokeStyle = gold;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 18); ctx.quadraticCurveTo(0, 0, 18, 0);
+      ctx.stroke();
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(8 + i * 8, 8 - i * 1, 3.2 - i * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    cornerFlourish(66, 66, false, false);
+    cornerFlourish(W - 66, 66, true, false);
+    cornerFlourish(66, H - 66, false, true);
+    cornerFlourish(W - 66, H - 66, true, true);
+
+    const titleY = 130;
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 2.5;
+    roundRectPath(120, titleY - 46, W - 240, 92, 46);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(176,141,47,0.08)";
+    roundRectPath(120, titleY - 46, W - 240, 92, 46);
+    ctx.fill();
+
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 2;
+    [[150, 195], [W - 195, W - 150]].forEach(([x1, x2]) => {
+      ctx.beginPath(); ctx.moveTo(x1, titleY); ctx.lineTo(x2, titleY); ctx.stroke();
+      ctx.beginPath(); ctx.arc((x1 + x2) / 2, titleY, 4, 0, Math.PI * 2); ctx.fillStyle = gold; ctx.fill();
+    });
+
+    ctx.textAlign = "center";
+    ctx.direction = "rtl";
+    ctx.fillStyle = ink;
+    ctx.font = '52px "Amiri Quran", serif';
+    ctx.fillText(`سُورَةُ ${verse.surah}`, W / 2, titleY + 16);
+
+    ctx.font = '54px "Amiri Quran", serif';
+    ctx.fillStyle = ink;
+    let y = topArea + lineHeight * 0.4;
+    lines.forEach((l) => { ctx.fillText(l, W / 2, y); y += lineHeight; });
+
+    const badgeY = y + 6;
+    ctx.beginPath();
+    ctx.arc(W / 2, badgeY, 34, 0, Math.PI * 2);
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(W / 2, badgeY, 27, 0, Math.PI * 2);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = goldDark;
+    ctx.font = '700 28px Amiri, serif';
+    ctx.fillText(toArabicNumerals(verse.ayahNumber), W / 2, badgeY + 10);
+
+    const footerY = H - 95;
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(150, footerY - 55);
+    ctx.lineTo(W - 150, footerY - 55);
+    ctx.stroke();
+
+    // استخدمي أيقونة Anisk الحقيقية من public بدل رسم حرف "ا" يدويًا،
+    // عشان الصورة المشتركة تحمل نفس هوية التطبيق بالضبط.
+    const logoSize = 64;
+    const logoX = W - 148, logoY = footerY - 2;
+    const logoImg = new Image();
+    logoImg.onload = () => {
+      ctx.save();
+      roundRectPath(logoX - logoSize / 2, logoY - logoSize / 2, logoSize, logoSize, 14);
+      ctx.clip();
+      ctx.drawImage(logoImg, logoX - logoSize / 2, logoY - logoSize / 2, logoSize, logoSize);
+      ctx.restore();
+
+      ctx.textAlign = "right";
+      ctx.fillStyle = ink;
+      ctx.font = '700 26px Cairo, sans-serif';
+      ctx.fillText("أنيسك", logoX - 46, logoY - 4);
+      ctx.font = '400 18px Cairo, sans-serif';
+      ctx.fillStyle = "#6B5A3D";
+      ctx.fillText("Anisk | رفيقك في طريقك إلى الله", logoX - 46, logoY + 20);
+      canvas.toBlob((blob) => resolve(blob), "image/png");
+    };
+    logoImg.onerror = () => {
+      // fallback آمن لو الأيقونة لم تُحمّل لأي سبب.
+      ctx.textAlign = "right";
+      ctx.fillStyle = ink;
+      ctx.font = '700 26px Cairo, sans-serif';
+      ctx.fillText("أنيسك", logoX - 46, logoY - 4);
+      ctx.font = '400 18px Cairo, sans-serif';
+      ctx.fillStyle = "#6B5A3D";
+      ctx.fillText("Anisk | رفيقك في طريقك إلى الله", logoX - 46, logoY + 20);
+      canvas.toBlob((blob) => resolve(blob), "image/png");
+    };
+    logoImg.src = "/icon-512.png";
+  });
+}
+
+// نفس بطاقة الآية، لكن بترسم الآية بحروف مصحف المدينة الحقيقية (خط QCF4)
+// بدل خط Amiri Quran العادي — عشان الصورة المشاركة تبقى بنفس خط المصحف
+// اللي القارئة شايفاه في التطبيق بالظبط.
+async function collectAyahQcfWords(item) {
+  const page = mushafPageForGlobal(item.globalNumber);
+  const data = await fetchMushafPageQCF(page);
+  const verseKey = `${item.surahId}:${item.localIndex + 1}`;
+  const words = [];
+  data.lines.forEach((line) => {
+    line.words.forEach((w) => {
+      if (w.verse_key === verseKey && (w.type === "word" || w.type === "end")) words.push(w);
+    });
+  });
+  if (!words.length) throw new Error("مفيش بيانات مصحف لهذه الآية");
+  const fonts = new Set(words.map((w) => w.font));
+  await ensureMushafFontsLoaded(fonts);
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  return words;
+}
+
+function generateVerseCardQCF(item) {
+  return new Promise((resolve, reject) => {
+    (async () => {
+      try {
+        const words = await collectAyahQcfWords(item);
+        const gold = "#B08D2F";
+        const goldDark = "#8C6D1F";
+        const ink = "#231A0E";
+        const W = 1080;
+        const FONT_SIZE = 58;
+
+        const measure = document.createElement("canvas").getContext("2d");
+        const maxWidth = W - 260;
+
+        // نلف الكلمات (كل واحدة كرمز/جليف من خط المصحف الحقيقي) على أسطر
+        // تملأ عرض البطاقة، بنفس منطق التفاف الأسطر في صفحة المصحف.
+        const qcfLines = [];
+        let current = [];
+        let currentWidth = 0;
+        words.forEach((w) => {
+          measure.font = `${FONT_SIZE}px "${w.font}"`;
+          const ch = String.fromCharCode(w.code);
+          const width = measure.measureText(ch).width;
+          if (currentWidth + width > maxWidth && current.length) {
+            qcfLines.push(current);
+            current = [];
+            currentWidth = 0;
+          }
+          current.push({ ch, font: w.font, width });
+          currentWidth += width;
+        });
+        if (current.length) qcfLines.push(current);
+
+        const lineHeight = 96;
+        const textBlockHeight = qcfLines.length * lineHeight;
+        const topArea = 230;
+        const bottomArea = 190;
+        const H = Math.max(620, topArea + textBlockHeight + bottomArea + 80);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext("2d");
+
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, "#FBF3E3");
+        bg.addColorStop(1, "#F3E4C6");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        function roundRectPath(x, y, w, h, r) {
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.arcTo(x + w, y, x + w, y + h, r);
+          ctx.arcTo(x + w, y + h, x, y + h, r);
+          ctx.arcTo(x, y + h, x, y, r);
+          ctx.arcTo(x, y, x + w, y, r);
+          ctx.closePath();
+        }
+
+        ctx.strokeStyle = gold;
+        ctx.lineWidth = 4;
+        roundRectPath(40, 40, W - 80, H - 80, 22);
+        ctx.stroke();
+        ctx.lineWidth = 1.5;
+        roundRectPath(54, 54, W - 108, H - 108, 16);
+        ctx.stroke();
+
+        function cornerFlourish(cx, cy, flipX, flipY) {
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+          ctx.strokeStyle = gold;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, 18); ctx.quadraticCurveTo(0, 0, 18, 0);
+          ctx.stroke();
+          for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.arc(8 + i * 8, 8 - i * 1, 3.2 - i * 0.6, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+        cornerFlourish(66, 66, false, false);
+        cornerFlourish(W - 66, 66, true, false);
+        cornerFlourish(66, H - 66, false, true);
+        cornerFlourish(W - 66, H - 66, true, true);
+
+        const titleY = 130;
+        ctx.strokeStyle = gold;
+        ctx.lineWidth = 2.5;
+        roundRectPath(120, titleY - 46, W - 240, 92, 46);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(176,141,47,0.08)";
+        roundRectPath(120, titleY - 46, W - 240, 92, 46);
+        ctx.fill();
+
+        ctx.strokeStyle = gold;
+        ctx.lineWidth = 2;
+        [[150, 195], [W - 195, W - 150]].forEach(([x1, x2]) => {
+          ctx.beginPath(); ctx.moveTo(x1, titleY); ctx.lineTo(x2, titleY); ctx.stroke();
+          ctx.beginPath(); ctx.arc((x1 + x2) / 2, titleY, 4, 0, Math.PI * 2); ctx.fillStyle = gold; ctx.fill();
+        });
+
+        try { await document.fonts.load('52px "Amiri Quran"'); } catch { /* تجاهل */ }
+        ctx.textAlign = "center";
+        ctx.direction = "rtl";
+        ctx.fillStyle = ink;
+        ctx.font = '52px "Amiri Quran", serif';
+        ctx.fillText(`سُورَةُ ${item.surahName}`, W / 2, titleY + 16);
+
+        // رسم كل كلمة (جليف مصحف حقيقي) بترتيبها الصح من اليمين للشمال
+        ctx.fillStyle = ink;
+        ctx.textAlign = "right";
+        let y = topArea + lineHeight * 0.4;
+        qcfLines.forEach((lineWords) => {
+          const totalWidth = lineWords.reduce((s, w) => s + w.width, 0);
+          let x = W / 2 + totalWidth / 2;
+          lineWords.forEach((w) => {
+            ctx.font = `${FONT_SIZE}px "${w.font}"`;
+            ctx.fillText(w.ch, x, y);
+            x -= w.width;
+          });
+          y += lineHeight;
+        });
+        ctx.textAlign = "center";
+
+        const logoSize = 64;
+        const footerY = H - 95;
+        ctx.strokeStyle = gold;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(150, footerY - 55);
+        ctx.lineTo(W - 150, footerY - 55);
+        ctx.stroke();
+
+        const logoX = W - 148, logoY = footerY - 2;
+        const logoImg = new Image();
+        const finish = () => {
+          ctx.textAlign = "right";
+          ctx.fillStyle = ink;
+          ctx.font = '700 26px Cairo, sans-serif';
+          ctx.fillText("أنيسك", logoX - 46, logoY - 4);
+          ctx.font = '400 18px Cairo, sans-serif';
+          ctx.fillStyle = "#6B5A3D";
+          ctx.fillText("Anisk | رفيقك في طريقك إلى الله", logoX - 46, logoY + 20);
+          canvas.toBlob((blob) => resolve(blob), "image/png");
+        };
+        logoImg.onload = () => {
+          ctx.save();
+          roundRectPath(logoX - logoSize / 2, logoY - logoSize / 2, logoSize, logoSize, 14);
+          ctx.clip();
+          ctx.drawImage(logoImg, logoX - logoSize / 2, logoY - logoSize / 2, logoSize, logoSize);
+          ctx.restore();
+          finish();
+        };
+        logoImg.onerror = finish;
+        logoImg.src = "/icon-512.png";
+      } catch (err) {
+        reject(err);
+      }
+    })();
+  });
+}
+
+// توليد بطاقة مشاركة لحديث كصورة PNG — نفس أسلوب بطاقة الآية
+function generateHadithCard(hadith, themeTokens) {
   return new Promise(async (resolve) => {
     try { await document.fonts.ready; } catch { /* تجاهل لو مش مدعوم */ }
     const canvas = document.createElement("canvas");
@@ -315,7 +695,6 @@ function generateVerseCard(verse, themeTokens) {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // إطار زخرفي بسيط
     ctx.strokeStyle = "rgba(255,255,255,0.55)";
     ctx.lineWidth = 3;
     ctx.strokeRect(50, 50, W - 100, H - 100);
@@ -327,10 +706,14 @@ function generateVerseCard(verse, themeTokens) {
     ctx.direction = "rtl";
     ctx.fillStyle = "#FFFFFF";
 
-    // نص الآية — التفاف تلقائي للسطور
-    ctx.font = "600 54px Amiri, serif";
-    const maxWidth = W - 200;
-    const words = verse.text.split(" ");
+    ctx.font = "600 30px Cairo, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fillText("📜 حديث شريف", W / 2, 150);
+
+    ctx.font = "700 50px Amiri, serif";
+    ctx.fillStyle = "#FFFFFF";
+    const maxWidth = W - 220;
+    const words = hadith.text.split(" ");
     const lines = [];
     let line = "";
     words.forEach((w) => {
@@ -340,21 +723,112 @@ function generateVerseCard(verse, themeTokens) {
     });
     if (line) lines.push(line);
 
-    const lineHeight = 78;
+    const lineHeight = 74;
     const totalHeight = lines.length * lineHeight;
     let y = H / 2 - totalHeight / 2 + 20;
     lines.forEach((l) => { ctx.fillText(l, W / 2, y); y += lineHeight; });
 
-    ctx.font = "38px Amiri, serif";
-    ctx.fillText(`﴿${verse.ayahNumber}﴾`, W / 2, y + 10);
-
     ctx.font = "600 30px Cairo, sans-serif";
     ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.fillText(`سورة ${verse.surah}`, W / 2, H - 160);
+    ctx.fillText(hadith.source, W / 2, y + 50);
 
     ctx.font = "26px Cairo, sans-serif";
     ctx.fillStyle = "rgba(255,255,255,0.65)";
     ctx.fillText("أنيسك · رفيقك في طريقك إلى الله", W / 2, H - 100);
+
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
+}
+
+// إحصائيات فترة (أسبوع/شهر) من أيام محفوظة — كل حقل بيتجمّع دفاعيًا (بقيم
+// افتراضية آمنة) عشان الأيام المحفوظة قبل إضافة حقل جديد (زي duha) متكسرش.
+function computePeriodStats(days, dayKeys) {
+  const s = { prayers: 0, prayersMax: 0, sunnah: 0, jamaah: 0, duhaCount: 0, qiyamCount: 0, quranPages: 0, adhkarCount: 0, fastingCount: 0, daysCount: 0 };
+  dayKeys.forEach((k) => {
+    const d = days[k];
+    if (!d) return;
+    s.daysCount++;
+    if (!d.excused) {
+      s.prayers += (d.prayers || []).filter(Boolean).length;
+      s.prayersMax += 5;
+      s.sunnah += (d.sunnah || []).filter(Boolean).length;
+      s.jamaah += (d.jamaah || []).filter(Boolean).length;
+    }
+    if (d.duha) s.duhaCount++;
+    if ((d.qiyam || []).length > 0) s.qiyamCount++;
+    if (d.fasting) s.fastingCount++;
+    s.quranPages += Number(d.quranPages || 0);
+    s.adhkarCount += Object.values(d.adhkar || {}).filter(Boolean).length;
+  });
+  return s;
+}
+
+function generateAchievementCard(stats, periodLabel, name, themeTokens) {
+  return new Promise(async (resolve) => {
+    try { await document.fonts.ready; } catch { /* تجاهل */ }
+    const canvas = document.createElement("canvas");
+    const W = 1080, H = 1350;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, themeTokens.hero1 || "#3E5B41");
+    bg.addColorStop(1, themeTokens.hero2 || "#B08D57");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(46, 46, W - 92, H - 92);
+
+    ctx.textAlign = "center";
+    ctx.direction = "rtl";
+    ctx.fillStyle = "#FFFFFF";
+
+    ctx.font = "700 46px Reem Kufi, sans-serif";
+    ctx.fillText("أنيسك", W / 2, 150);
+    ctx.font = "600 32px Cairo, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillText(`إنجاز ${name ? name + " " : ""}${periodLabel}`, W / 2, 205);
+
+    const rows = [
+      ["🕌", "الصلوات المفروضة", `${stats.prayers} / ${stats.prayersMax}`],
+      ["🕋", "صلاة الجماعة", `${stats.jamaah}`],
+      ["✨", "السنن الرواتب", `${stats.sunnah}`],
+      ["☀️", "صلاة الضحى", `${stats.duhaCount} يوم`],
+      ["🌙", "قيام الليل", `${stats.qiyamCount} يوم`],
+      ["📖", "صفحات القرآن", `${stats.quranPages}`],
+      ["📿", "الأذكار", `${stats.adhkarCount} مرة`],
+      ["🌸", "الصيام التطوّعي", `${stats.fastingCount} يوم`],
+    ];
+
+    let y = 320;
+    const rowH = 118;
+    rows.forEach(([icon, label, value]) => {
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.beginPath();
+      ctx.roundRect(90, y - 60, W - 180, 92, 20);
+      ctx.fill();
+
+      ctx.textAlign = "right";
+      ctx.font = "44px Cairo, sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(icon, W - 130, y + 2);
+
+      ctx.font = "600 32px Cairo, sans-serif";
+      ctx.fillText(label, W - 200, y + 2);
+
+      ctx.textAlign = "left";
+      ctx.font = "700 36px Reem Kufi, sans-serif";
+      ctx.fillText(value, 130, y + 2);
+
+      y += rowH;
+    });
+
+    ctx.textAlign = "center";
+    ctx.font = "26px Cairo, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.fillText("أنيسك · رفيقك في طريقك إلى الله", W / 2, H - 90);
 
     canvas.toBlob((blob) => resolve(blob), "image/png");
   });
@@ -408,8 +882,13 @@ function mp3QuranSurahUrl(server, surahNumber) {
   return `${server}${String(surahNumber).padStart(3, "0")}.mp3`;
 }
 
-// قائمة صفحات المصحف العثماني القياسي (٦٠٤ صفحة) — كل عنصر هو رقم الآية العالمي الذي تبدأ به الصفحة
-// المصدر: حزمة quran-meta مفتوحة المصدر (رخصة MIT) — بيانات هيكلية غير محمية بحقوق نشر إبداعية
+// قائمة صفحات مصحف المدينة النبوية القياسي (٦٠٤ صفحة، ١٥ سطرًا في الصفحة) — نفس تقسيم
+// الصفحات المعتمد في مصحف المدينة (طبعة مجمع الملك فهد، ١٤٢١هـ) وهو المرجع الذي تبني عليه
+// كل واجهات القرآن الرقمية الكبرى (tanzil.net وquran.com وalquran.cloud) — كل عنصر هو رقم
+// الآية العالمي الذي تبدأ به الصفحة. المصدر: حزمة quran-meta مفتوحة المصدر (رخصة MIT).
+// ملاحظة أمانة: التحقق هنا اقتصر على مطابقة نقاط مرجعية معروفة (بداية السور، آية الكرسي...)
+// وليس مطابقة الـ٦٠٤ صفحة سطرًا بسطر مقابل قاعدة بيانات QUL الرسمية، لأن ملفات QUL نفسها
+// (SQLite/JSON) غير متاحة للتحميل المباشر من هنا.
 const MUSHAF_PAGE_STARTS = [1,8,13,24,32,37,45,56,65,69,77,84,91,96,101,109,113,120,127,134,142,149,153,161,171,177,184,189,194,198,204,210,218,223,227,232,238,241,245,253,256,260,264,267,272,277,282,289,290,294,303,309,316,323,331,339,346,355,364,371,377,385,394,402,409,415,426,434,442,447,451,459,467,474,480,488,494,500,505,508,513,517,520,527,531,538,545,553,559,568,573,580,585,588,595,599,607,615,621,628,634,641,648,656,664,669,672,675,679,683,687,693,701,706,711,715,720,727,734,740,746,752,759,765,773,778,783,790,798,808,817,825,834,842,849,858,863,871,880,884,891,900,908,914,921,927,932,936,941,947,955,966,977,985,992,998,1006,1012,1022,1028,1036,1042,1050,1059,1075,1085,1092,1098,1104,1110,1114,1118,1125,1133,1142,1150,1161,1169,1177,1186,1194,1201,1206,1213,1222,1230,1236,1242,1249,1256,1262,1267,1272,1276,1283,1290,1297,1304,1308,1315,1322,1329,1335,1342,1347,1353,1358,1365,1371,1379,1385,1390,1398,1407,1418,1426,1435,1443,1453,1462,1471,1479,1486,1493,1502,1511,1519,1527,1536,1545,1555,1562,1571,1582,1591,1601,1611,1619,1627,1634,1640,1649,1660,1666,1675,1683,1692,1700,1708,1713,1721,1726,1736,1742,1750,1756,1761,1769,1775,1784,1793,1803,1818,1834,1854,1873,1893,1908,1916,1928,1936,1944,1956,1966,1974,1981,1989,1995,2004,2012,2020,2030,2037,2047,2057,2068,2079,2088,2096,2105,2116,2126,2134,2145,2156,2161,2168,2175,2186,2194,2202,2215,2224,2238,2251,2262,2276,2289,2302,2315,2327,2346,2361,2386,2400,2413,2425,2436,2447,2462,2474,2484,2494,2508,2519,2528,2541,2556,2565,2574,2585,2596,2601,2611,2619,2626,2634,2642,2651,2660,2668,2674,2691,2701,2716,2733,2748,2763,2778,2792,2802,2812,2819,2823,2828,2835,2845,2850,2853,2858,2867,2876,2888,2899,2911,2923,2933,2952,2972,2993,3016,3044,3069,3092,3116,3139,3160,3173,3182,3195,3204,3215,3223,3236,3248,3258,3266,3274,3281,3288,3296,3303,3312,3323,3330,3337,3347,3355,3364,3371,3379,3386,3393,3404,3415,3425,3434,3442,3451,3460,3470,3481,3489,3498,3504,3515,3524,3534,3540,3549,3556,3564,3569,3577,3584,3588,3596,3607,3614,3621,3629,3638,3646,3655,3664,3672,3679,3691,3699,3705,3718,3733,3746,3760,3776,3789,3813,3840,3865,3891,3915,3942,3971,3987,3997,4013,4032,4054,4064,4069,4080,4090,4099,4106,4115,4126,4133,4141,4150,4159,4167,4174,4183,4192,4200,4211,4219,4230,4239,4248,4257,4265,4273,4283,4288,4295,4304,4317,4324,4336,4348,4359,4373,4386,4399,4415,4433,4454,4474,4487,4496,4506,4516,4525,4531,4539,4546,4557,4565,4575,4584,4593,4599,4607,4612,4617,4624,4631,4646,4666,4682,4706,4727,4750,4767,4785,4811,4829,4853,4874,4896,4918,4942,4969,4996,5030,5056,5079,5087,5094,5100,5105,5111,5116,5126,5130,5136,5143,5151,5156,5162,5169,5178,5186,5193,5200,5209,5218,5223,5230,5237,5242,5254,5268,5287,5314,5332,5358,5386,5415,5430,5448,5461,5476,5495,5513,5543,5571,5597,5617,5642,5673,5703,5728,5759,5801,5830,5855,5883,5910,5932,5964,5994,6017,6044,6073,6099,6126,6138,6156,6177,6194,6208,6222,6237];
 
 // عدد صفحات المصحف القياسي
@@ -680,6 +1159,430 @@ function todayKey(d = new Date()) {
 }
 
 /* =========================================================================
+   المصحف الحقيقي (شكل وخط الطباعة الفعلي) — QCF4، خط عثمان طه الرسمي
+   الصادر عن مجمع الملك فهد لطباعة المصحف الشريف (مصحف المدينة، ١٤٤١هـ —
+   أحدث إصدار رسمي متاح؛ نفس الخط والتنضيد المستخدم في مصحف المدينة الحديث).
+   المصدر: مستودع مفتوح (MIT للكود، خطوط KFGQPC بشروط استخدامها الخاصة بمجمع
+   الملك فهد): https://github.com/MohamadHajjRabee/quran-qcf4
+
+   سبب "الآيات اللي مش كاملة": كان في السباق بين ظهور النص وتحميل الخط —
+   الكلمة كانت بتتّرسم قبل ما الخط يوصل فعليًا، فبتظهر فاضية لحظة (أو فاضية
+   خالص لو الصفحة اتقلبت بسرعة). الحل: دلوقتي بنستنى تحميل الخط فعليًا
+   (FontFace().load()) قبل ما نعرض أي كلمة من الصفحة، مش بس نحقن الـCSS
+   ونسيب المتصفح "يتصرف".
+
+   التخزين للقراءة بدون نت: كل صفحة وكل خط بيتحفظوا في Cache Storage الخاصة
+   بالمتصفح (caches API) بمجرد ما تتحمّل مرة واحدة وهي متصلة بالنت — فبعد
+   كده بيفتحوا من غير نت تلقائيًا. وتحت في الواجهة فيه زرار "تنزيل المصحف
+   كامل" يحمّل الـ٦٠٤ صفحة والـ٤٧ خط دفعة واحدة وانتِ متصلة، عشان يبقى
+   المصحف كله متاح بدون نت من غير ما تفتحي كل صفحة بنفسك الأول.
+   ========================================================================= */
+
+const QCF_REPO = "https://raw.githubusercontent.com/MohamadHajjRabee/quran-qcf4/main";
+const QCF_FONT_CDN = "https://cdn.jsdelivr.net/gh/MohamadHajjRabee/quran-qcf4@main/fonts-woff2";
+// المسار المحلي جوه التطبيق نفسه (public/mushaf) — لو الملفات موجودة هنا (بعد
+// تشغيل سكريبت التنزيل مرة واحدة، راجعي scripts/download-mushaf-assets.mjs)
+// التطبيق مش هيلمس النت خالص، ولا حتى أول مرة يتفتح.
+const LOCAL_MUSHAF_BASE = "/mushaf";
+const QCF_CACHE_NAME = "mushaf-qcf4-v1";
+const QCF_TOTAL_PAGES = 604;
+const QCF_FONT_NAMES = [
+  ...Array.from({ length: 47 }, (_, i) => `QCF4_Hafs_${String(i + 1).padStart(2, "0")}`),
+  "QCF4_QBSML",
+];
+
+const mushafPageDataCache = new Map(); // pageNum(string, 3 digits) -> parsed page JSON (ذاكرة الجلسة)
+const mushafLoadedFonts = new Set(); // font-family names أُضيفت فعليًا لـ document.fonts (وخلص تحميلها)
+const mushafFontLoadPromises = new Map(); // font-family -> Promise (عشان منحملش نفس الخط مرتين لو طلبين حصلوا مع بعض
+let mushafBundledLocally = null; // null = لسه منعرفش، true/false بعد أول تجربة فحص
+
+function qcfFontFileName(fontFamily) {
+  return fontFamily.includes("QBSML") || fontFamily.includes("HEADER")
+    ? `${fontFamily}.woff2`
+    : `${fontFamily}_W.woff2`;
+}
+
+// فحص سريع (مرة واحدة بس) هل ملفات المصحف موجودة مدمجة جوه التطبيق نفسه —
+// لو موجودة، التطبيق هيقرأ منها طول الوقت وميحاولش يوصل للنت خالص.
+async function isMushafBundledLocally() {
+  if (mushafBundledLocally !== null) return mushafBundledLocally;
+  try {
+    const res = await fetch(`${LOCAL_MUSHAF_BASE}/pages/001.json`, { cache: "force-cache" });
+    mushafBundledLocally = !!(res && res.ok);
+  } catch {
+    mushafBundledLocally = false;
+  }
+  return mushafBundledLocally;
+}
+
+// fetch بيحفظ في Cache Storage الدائمة (مش ذاكرة الجلسة) — أول مرة بتتحمّل من
+// النت وبعدها بتتقرأ من التخزين المحلي حتى من غير نت، وحتى بعد إغلاق التطبيق.
+// (ده الاحتياطي بس لو لسه معملتيش تضمين محلي — لو عملتيه مش هيتلمس خالص.)
+async function cachedFetch(url) {
+  if (typeof caches === "undefined") return fetch(url);
+  try {
+    const cache = await caches.open(QCF_CACHE_NAME);
+    const hit = await cache.match(url);
+    if (hit) return hit;
+    const res = await fetch(url);
+    if (res && res.ok) cache.put(url, res.clone());
+    return res;
+  } catch {
+    return fetch(url); // لو Cache Storage مش متاحة لأي سبب، رجّعي لطلب الشبكة العادي
+  }
+}
+
+async function isMushafPageCachedOffline(pageNum) {
+  if (await isMushafBundledLocally()) return true; // مدمج جوه التطبيق = متاح بدون نت دايمًا
+  if (typeof caches === "undefined") return false;
+  try {
+    const cache = await caches.open(QCF_CACHE_NAME);
+    const key = String(pageNum).padStart(3, "0");
+    const hit = await cache.match(`${QCF_REPO}/pages/${key}.json`);
+    return !!hit;
+  } catch { return false; }
+}
+
+async function fetchMushafPageQCF(pageNum) {
+  const key = String(pageNum).padStart(3, "0");
+  if (mushafPageDataCache.has(key)) return mushafPageDataCache.get(key);
+  // أول حاجة نجرب: هل الصفحة دي مدمجة جوه التطبيق نفسه (بدون نت خالص)؟
+  if (await isMushafBundledLocally()) {
+    const localRes = await fetch(`${LOCAL_MUSHAF_BASE}/pages/${key}.json`);
+    if (localRes.ok) {
+      const data = await localRes.json();
+      mushafPageDataCache.set(key, data);
+      return data;
+    }
+  }
+  // لو مش مدمجة (لسه معملتيش خطوة التضمين)، نرجع لطلب النت العادي مع الحفظ
+  // في الكاش الدائم للمرات الجاية.
+  const res = await cachedFetch(`${QCF_REPO}/pages/${key}.json`);
+  if (!res || !res.ok) throw new Error("تعذّر تحميل صفحة المصحف");
+  const data = await res.json();
+  mushafPageDataCache.set(key, data);
+  return data;
+}
+
+// بيحمّل الخط فعليًا (مش بس يحقن CSS) ويستنى لحد ما يبقى جاهز للرسم فعلًا،
+// عشان تتلافى مشكلة "الكلمة بتظهر فاضية" وقت ما الصفحة بتتقلب بسرعة.
+async function loadMushafFont(fontFamily) {
+  if (mushafLoadedFonts.has(fontFamily)) return;
+  if (mushafFontLoadPromises.has(fontFamily)) return mushafFontLoadPromises.get(fontFamily);
+  const promise = (async () => {
+    const fileName = qcfFontFileName(fontFamily);
+    let source = null;
+    // أول حاجة: الخط المدمج جوه التطبيق (بدون نت خالص)
+    if (await isMushafBundledLocally()) {
+      try {
+        const localRes = await fetch(`${LOCAL_MUSHAF_BASE}/fonts/${fileName}`);
+        if (localRes.ok) {
+          const blob = await localRes.blob();
+          source = `url("${URL.createObjectURL(blob)}")`;
+        }
+      } catch { /* هنكمل على المصدر التاني */ }
+    }
+    // لو مش موجود محليًا، نرجع لرابط الإنترنت (وبيتحفظ في الكاش الدائم للمرة الجاية)
+    if (!source) {
+      const url = `${QCF_FONT_CDN}/${fileName}`;
+      source = `url("${url}")`;
+      try {
+        const res = await cachedFetch(url);
+        if (res && res.ok) {
+          const blob = await res.blob();
+          source = `url("${URL.createObjectURL(blob)}")`;
+        }
+      } catch { /* هنسيب source يرجع لرابط الـCDN المباشر */ }
+    }
+    const face = new FontFace(fontFamily, source);
+    await face.load();
+    document.fonts.add(face);
+    mushafLoadedFonts.add(fontFamily);
+  })();
+  mushafFontLoadPromises.set(fontFamily, promise);
+  return promise;
+}
+
+async function ensureMushafFontsLoaded(fontFamilies) {
+  await Promise.all([...fontFamilies].filter(Boolean).map(loadMushafFont));
+}
+
+// تنزيل المصحف كامل (٦٠٤ صفحة + ٤٧ خط) دفعة واحدة وانتِ متصلة، عشان يبقى
+// متاح بدون نت بعد كده بالكامل من غير ما تفتحي كل صفحة بنفسك الأول.
+async function downloadFullMushafOffline(onProgress) {
+  if (await isMushafBundledLocally()) { if (onProgress) onProgress(QCF_TOTAL_PAGES, QCF_TOTAL_PAGES); return; } // مدمج بالفعل، مفيش داعي نزل حاجة
+  await Promise.all(QCF_FONT_NAMES.map(loadMushafFont));
+  let done = 0;
+  const concurrency = 6;
+  const pages = Array.from({ length: QCF_TOTAL_PAGES }, (_, i) => i + 1);
+  let idx = 0;
+  async function worker() {
+    while (idx < pages.length) {
+      const p = pages[idx++];
+      try { await fetchMushafPageQCF(p); } catch { /* هنكمل الباقي حتى لو صفحة فشلت */ }
+      done++;
+      if (onProgress) onProgress(done, QCF_TOTAL_PAGES);
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker));
+}
+
+// كل سطر في مصحف المدينة الحقيقي "معدَّل" (justified) بحيث يملأ عرض الصفحة
+// بالظبط — ده مصمَّم أصلًا على عرض ثابت لصفحة الطباعة. شاشة الموبايل/المتصفح
+// عرضها بيختلف من جهاز لجهاز، فلو السطر أعرض من الشاشة بيتقص من الطرفين
+// (وده سبب اختفاء الكلمات على حدود الصفحة). الحل: نقيس عرض السطر الطبيعي
+// ونضغطه/نمدّده أفقيًا (scaleX) عشان يملأ عرض الشاشة بالظبط زي ما هو في
+// الصفحة المطبوعة، من غير ما تتقص ولا كلمة.
+// كل سطر في مصحف المدينة معدَّل (justified) ليملأ عرض الصفحة بالظبط. الخط
+// نفسه مصمَّم لعرض تصميم معيّن؛ عشان نضمن ملء العرض من غير ما تتقص كلمة ولا
+// يفضل فراغ على الجنب، بنقيس عرض السطر الطبيعي ونضبطه أفقيًا (scaleX) ليملأ
+// عرض الإطار بالظبط — ومنقيسش مرة واحدة بس، بل بنراقب لو عرضه "الحقيقي" اتغيّر
+// (بيحصل أحيانًا لحظة ما الخط يخلص "تشكيل" الحروف بعد أول رسم).
+// عرض صفحة المصحف الحقيقية حرفيًا (نفس الخط، نفس أماكن الأسطر، نفس التمديد).
+// pageItems: نفس عناصر الصفحة الجاهزة في التطبيق ({globalNumber, surahId, surahName, localIndex,...})
+// مستخدمة فقط لربط كل كلمة بالآية الصح عشان تفتح نفس قائمة الخيارات المعتادة.
+//
+// طريقة الضبط: بدل ما نحاول "نمطّط" كل سطر لوحده بعد ما يترسم (وده كان بيغلط
+// أحيانًا ويقصّ حروف من حافة السطر)، بنقيس عرض كل سطر فعليًا على Canvas
+// (قياس رياضي مضمون، من غير ما نستنى المتصفح يرسم حاجة) قبل ما نعرض أي حرف
+// خالص، ونختار حجم خط واحد للصفحة كلها يخلّي أعرض سطر فيها بالظبط داخل حدود
+// الإطار — فمفيش سطر ممكن يتقص أبدًا مهما كان طويل. وارتفاع الصفحة بقى بيتغيّر
+// حسب عدد أسطرها الحقيقي (مش رقم ثابت ١٥ سطر دايمًا)، فصفحة الفاتحة القصيرة
+// مبقاش فيها فراغ كبير تحت من غير داعٍ.
+// البسملة الأصلية في QCF4 — نفس الجليف المستخدم في مصحف المدينة داخل الصفحة،
+// بدون إعادة تشكيل أو bidi، لذلك تظهر من اليمين لليسار كقطعة واحدة نظيفة.
+// البسملة تُؤخذ من بيانات صفحة QCF4 نفسها، وليس من نص عربي يُعاد تشكيله
+// بالمتصفح. ده مهم جدًا لأن الجليف الموجود في بيانات المصحف هو نفس الشكل
+// المستخدم داخل الصفحة، وكونه حرفًا واحدًا يمنع قلب الكلمات أو "الشخبطة".
+function MushafBismillah({ word, nightMode, fontSize = 26 }) {
+  if (!word) return null;
+  return (
+    <div dir="rtl" aria-label="بسم الله الرحمن الرحيم" style={{
+      width: "100%", minHeight: fontSize * 1.9, display: "flex", alignItems: "center", justifyContent: "center",
+      margin: "4px 0 9px", overflow: "visible", position: "relative", direction: "rtl",
+    }}>
+      <span style={{
+        fontFamily: `"${word.font}"`, fontSize, lineHeight: 1.5,
+        color: nightMode ? "#EBE1C6" : "var(--text)", direction: "rtl", unicodeBidi: "normal",
+        whiteSpace: "nowrap", display: "block",
+      }}>
+        {word.char || String.fromCharCode(word.code)}
+      </span>
+    </div>
+  );
+}
+
+function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTags, hiddenAyahs, onToggleHiddenAyah, nightMode, onError }) {
+  const [pageData, setPageData] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [fitFontSize, setFitFontSize] = useState(26);
+  const viewerRef = useRef(null);
+  const [pageScale, setPageScale] = useState(0.65);
+  const PAGE_WIDTH = 600;
+  // الفاتحة وأول صفحة من البقرة لهما ضبط خاص مقصود؛ لا نغيّر نسبهما.
+  // بقية الصفحات تستفيد من العرض الكامل للمصحف بدل الفراغ الواسع حول النص.
+  const PAGE_SIDE_PADDING = pageNum <= 2 ? 34 : 10;
+  const REF_FONT_SIZE = 60; // حجم مرجعي نقيس بيه العرض الطبيعي لكل سطر
+  const LINE_UNIT = 60; // ارتفاع تقريبي لكل سطر عادي (بوحدات تصميم الصفحة الثابت 600px)
+  const [pageHeight, setPageHeight] = useState(700);
+
+  useLayoutEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const fitPage = () => setPageScale(Math.min(1, Math.max(0.1, viewer.clientWidth / PAGE_WIDTH)));
+    fitPage();
+    const observer = new ResizeObserver(fitPage);
+    observer.observe(viewer);
+    return () => observer.disconnect();
+  }, [pageData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPageData(null);
+    setLoadError(false);
+    (async () => {
+      try {
+        const data = await fetchMushafPageQCF(pageNum);
+        const fonts = new Set();
+        data.lines.forEach((l) => l.words.forEach((w) => fonts.add(w.font)));
+        // كل سطر في بيانات QCF4 يحمل الخط الصحيح للجليف الذي سيُرسم.
+        // لا نستبدل البسملة بخط/حرف مُنشأ يدويًا.
+        await ensureMushafFontsLoaded(fonts); // منعرضش أي كلمة قبل ما الخط يبقى جاهز فعلًا
+        if (document.fonts && document.fonts.ready) await document.fonts.ready; // تأكيد إضافي إن كل الخطوط استقرت قبل القياس
+
+        // قياس عرض كل سطر "عادي" (مش عناوين سور ولا بسملة) عشان نلاقي أعرضهم،
+        // ونحسب حجم خط واحد يخلّي حتى أعرض سطر يتظبط جوه العرض المتاح بالظبط.
+        const measureCtx = document.createElement("canvas").getContext("2d");
+        let maxLineWidth = 0;
+        let lineCount = 0;
+        data.lines.forEach((line) => {
+          const special = line.words.find((w) => w.type !== "word" && w.type !== "end")?.type;
+          lineCount += 1;
+          if (special) return;
+          let w = 0;
+          line.words.forEach((word) => {
+            measureCtx.font = `${REF_FONT_SIZE}px "${word.font}"`;
+            w += measureCtx.measureText(String.fromCharCode(word.code)).width;
+          });
+          if (w > maxLineWidth) maxLineWidth = w;
+        });
+        const availableWidth = PAGE_WIDTH - PAGE_SIDE_PADDING * 2;
+        const nextFontSize = maxLineWidth > 0
+          ? Math.max(14, Math.min(REF_FONT_SIZE, (availableWidth / maxLineWidth) * REF_FONT_SIZE * 0.97))
+          : 26;
+
+        if (!cancelled) {
+          setFitFontSize(nextFontSize);
+          setPageHeight(Math.max(500, lineCount * LINE_UNIT * (nextFontSize / 26) + 140));
+          setPageData(data);
+        }
+      } catch {
+        if (!cancelled) { setLoadError(true); if (onError) onError(); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pageNum]);
+
+  if (loadError) {
+    return (
+      <div style={{ textAlign: "center", padding: "30px 12px", color: "var(--textDim)", fontFamily: "'Cairo', sans-serif", fontSize: 13, lineHeight: 1.8 }}>
+        تعذّر تحميل صفحة المصحف الحقيقية دي (محتاجة اتصال إنترنت أول مرة، أو نزّليها مسبقًا من "تنزيل المصحف كامل" تحت في الإعدادات).
+        <br />ممكن ترجعي للعرض النصي العادي من الزر فوق مؤقتًا.
+      </div>
+    );
+  }
+  if (!pageData) {
+    return (
+      <div style={{ textAlign: "center", padding: "30px 12px", color: "var(--textDim)", fontFamily: "'Cairo', sans-serif", fontSize: 13 }}>
+        جارٍ تحميل صفحة المصحف…
+      </div>
+    );
+  }
+
+  const findItem = (verseKey) => {
+    if (!verseKey) return null;
+    const [sId, ayahNum] = verseKey.split(":").map(Number);
+    return pageItems.find((it) => it.surahId === sId && it.localIndex === ayahNum - 1) || null;
+  };
+
+  const hiddenMarksFor = (text) => {
+    // نحتسب الحروف فقط (لا التشكيل أو علامة نهاية الآية)، ثم نرسم شرطات
+    // بعددها؛ ويبقى عرض كلمة المصحف الأصلي في مكانه تمامًا.
+    const letters = Array.from(text || "").filter((ch) => /[\u0621-\u064A]/.test(ch)).length;
+    return "—".repeat(Math.max(1, letters));
+  };
+
+  return (
+    <div ref={viewerRef} dir="rtl" style={{ position: "relative", width: "100%", height: pageHeight * pageScale, overflow: "hidden" }}>
+      <div style={{
+        position: "absolute", top: 0, left: "50%", display: "flex", flexDirection: "column", justifyContent: "center", gap: 6,
+        width: PAGE_WIDTH, minHeight: pageHeight, padding: "8px 0", boxSizing: "border-box",
+        transform: `translateX(-50%) scale(${pageScale})`, transformOrigin: "top center",
+      }}>
+      {pageData.lines.map((line) => {
+        const specialType = line.words.find((w) => w.type !== "word" && w.type !== "end")?.type;
+
+        // اسم السورة — الصندوق الاحترافي المزخرف (زي المطبوع بالظبط)
+        if (specialType === "surah_header") {
+          return (
+            <div key={line.line} style={{
+              position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
+              margin: "14px auto 10px", padding: "10px 20px", width: "94%",
+              border: `2px solid ${nightMode ? "#C9A66B" : "var(--accent)"}`,
+              borderRadius: 10, background: nightMode ? "rgba(201,166,107,0.08)" : "var(--accentSoft)",
+              direction: "rtl", unicodeBidi: "bidi-override", overflow: "hidden",
+            }}>
+              <div style={{ position: "absolute", inset: 3, border: `1px solid ${nightMode ? "#C9A66B" : "var(--accent)"}`, borderRadius: 7, opacity: 0.55, pointerEvents: "none" }} />
+              {line.words.map((w, wi) => (
+                <span key={wi} style={{ fontFamily: `"${w.font}"`, fontSize: Math.min(25, fitFontSize + 4), color: nightMode ? "#C9A66B" : "var(--accent)", lineHeight: 1.7, position: "relative" }}>
+                  {String.fromCharCode(w.code)}
+                </span>
+              ))}
+            </div>
+          );
+        }
+
+        // البسملة لكل سورة ما عدا الفاتحة والتوبة — جليف واحد ثابت من نفس خط المصحف،
+        // مع اتجاه RTL طبيعي ومن غير bidi-override حتى لا يحدث قلب/شخبطة في المتصفح.
+        if (specialType === "bismillah") {
+          const bismillahWord = line.words.find((w) => w.type === "bismillah");
+          const surahNumber = bismillahWord?.sura;
+          // الفاتحة لا تحتوي على سطر بسملة مستقل في بيانات الصفحة، والتوبة أصلًا بلا بسملة.
+          if (surahNumber === 1 || surahNumber === 9) return null;
+          return <MushafBismillah key={line.line} word={bismillahWord} nightMode={nightMode} fontSize={fitFontSize} />;
+        }
+
+        return (
+          <div key={line.line} dir="rtl" style={{ textAlign: "center", direction: "rtl", unicodeBidi: "bidi-override", overflow: "hidden" }}>
+            {line.words.map((w, wi) => {
+              const item = findItem(w.verse_key);
+              const isMarked = item && markedAyah?.globalNumber === item.globalNumber;
+              const isHidden = item && !!hiddenAyahs?.[item.globalNumber];
+              const isEndMarker = w.type === "end";
+              const tags = item ? (ayahTags?.[item.globalNumber] || []) : [];
+              return (
+                <span
+                  key={wi}
+                  onClick={() => {
+                    if (!item) return;
+                    if (isHidden) onToggleHiddenAyah(item);
+                    else onOpenAyahMenu(item);
+                  }}
+                  title={isHidden ? "اضغطي لإظهار الآية" : undefined}
+                  style={{
+                    position: "relative", fontFamily: `"${w.font}"`, fontSize: fitFontSize, lineHeight: 2.1,
+                    cursor: item ? "pointer" : "default",
+                    // رقم نهاية الآية يفضل ظاهر دايمًا حتى لو الآية مخفية — الإخفاء بيمسح الكلمات بس
+                    color: (isHidden && !isEndMarker) ? "transparent" : (nightMode ? "#EBE1C6" : "var(--text)"),
+                    background: isMarked && !isHidden ? "var(--accentSoft)" : "transparent",
+                    borderRadius: 3,
+                  }}
+                >
+                  {String.fromCharCode(w.code)}
+                  {isHidden && w.type === "word" && (
+                    <span aria-hidden="true" style={{
+                      position: "absolute", insetInline: 1, top: "53%", overflow: "hidden",
+                      color: nightMode ? "#C9A66B" : "var(--accent)", fontFamily: "monospace",
+                      fontSize: 10, fontWeight: 700, lineHeight: 1, letterSpacing: 1,
+                      whiteSpace: "nowrap", textAlign: "center", direction: "ltr", pointerEvents: "none",
+                    }}>
+                      {hiddenMarksFor(w.text)}
+                    </span>
+                  )}
+                  {isEndMarker && isMarked && (
+                    <Bookmark
+                      size={13} fill="currentColor" strokeWidth={1.5}
+                      style={{ position: "absolute", top: -9, left: "50%", transform: "translateX(-50%)", color: nightMode ? "#C9A66B" : "var(--accent)" }}
+                    />
+                  )}
+                  {isEndMarker && tags.length > 0 && (
+                    <span
+                      aria-label={`علامات الآية: ${tags.map((tagId) => AYAH_TAG_TYPES.find((tag) => tag.id === tagId)?.label).filter(Boolean).join("، ")}`}
+                      title={tags.map((tagId) => AYAH_TAG_TYPES.find((tag) => tag.id === tagId)?.label).filter(Boolean).join(" · ")}
+                      style={{
+                        position: "absolute", top: -13, insetInlineEnd: -5, display: "inline-flex", alignItems: "center",
+                        gap: 1, padding: "2px 3px", borderRadius: 7,
+                        background: nightMode ? "rgba(16,13,7,.92)" : "rgba(255,255,255,.94)",
+                        border: `1px solid ${nightMode ? "rgba(201,166,107,.34)" : "rgba(176,141,87,.24)"}`,
+                        lineHeight: 1, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 3,
+                        boxShadow: "0 2px 5px rgba(0,0,0,.10)",
+                      }}
+                    >
+                      {tags.map((tagId) => <AyahTagIcon key={tagId} type={tagId} size={10} />)}
+                    </span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        );
+      })}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
    QuranService — live text from api.alquran.cloud with honest fallback.
    Text edition: quran-uthmani (Arabic, verified). No text is invented;
    if the network call fails, the app clearly says so and uses the small
@@ -848,6 +1751,8 @@ function fmtTime(d) {
 const SALAWAT_PHRASES = [
   "اللَّهُمَّ صَلِّ وَسَلِّمْ وَبَارِكْ عَلَى نَبِيِّنَا مُحَمَّدٍ",
   "اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ وَعَلَى آلِ مُحَمَّدٍ",
+  "اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ كَمَا صَلَّيْتَ عَلَى إِبْرَاهِيمَ وَآلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ",
+  "صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ",
 ];
 const ISTIGHFAR_PHRASES = [
   "أَسْتَغْفِرُ اللَّهَ",
@@ -869,7 +1774,7 @@ function formatCountdown(targetDate) {
   return `${m} دقيقة`;
 }
 const PRAYER_TIME_COLORS = ["#7C9CBF", "#E3A72E", "#D97B3F", "#C15B4E", "#5B6FA8"];
-const SUNNAH = ["ركعتان قبل الفجر", "ركعتان قبل الظهر", "ركعتان بعد الظهر", "ركعتان بعد المغرب", "ركعتان بعد العشاء", "صلاة الضحى"];
+const SUNNAH = ["ركعتان قبل الفجر", "ركعتان قبل الظهر", "ركعتان بعد الظهر", "ركعتان بعد المغرب", "ركعتان بعد العشاء"];
 // ربط كل صلاة مفروضة بالسنن الرواتب المرتبطة بيها (لو موجودة) — يُستخدم لعرض سؤال
 // سريع "صليتِ السنة؟" فور تسجيل الفرض من الصفحة الرئيسية، بدل ما تضطري تدخلي شاشة
 // "عبادتي" وتأكدي تسجيلها تاني بشكل منفصل. فهرس sunnahIndex بيطابق ترتيب SUNNAH فوق.
@@ -898,6 +1803,7 @@ function emptyDay() {
     reflection: "",
     excused: false, // يوم عذر شرعي (حيض/نفاس) — الصلاة والصيام غير واجبين هذا اليوم
     fasting: false, // صيام تطوّع (الاثنين والخميس، الأيام البيض، أو أي يوم تطوّعي آخر)
+    duha: false, // صلاة الضحى
     fridayTasks: [], // خصائص يوم الجمعة (غسل، تبكير، سورة الكهف...) — تظهر يوم الجمعة بس
     taraweeh: false, // صلاة التراويح — تظهر تلقائيًا في رمضان بس
   };
@@ -934,12 +1840,13 @@ const DEFAULT_STATE = {
   onboarded: false,
   themeMode: "system",
   lightTheme: "classic",
+  darkTheme: "classic",
   lang: "ar",
   nightQuranMode: false,
   prefs: {
     name: "", dailyGoal: "2", memGoal: "سورة البقرة", reciter: "afasy", quranReciter: "afasy", gender: "female",
     notifPrayer: true, notifPreAdhan: true, notifIqama: true, iqamaDelayMin: 15, notifQuran: true, notifAdhkar: true, notifQiyam: true,
-    notifDuha: false, notifFastingEve: false, fajrAlarmEnabled: false, fajrConfirmedDate: null,
+    notifDuha: false, notifFastingEve: true, fajrAlarmEnabled: false, fajrConfirmedDate: null,
     adhanSoundEnabled: true, adhanVoice: "afasy",
     location: { lat: 30.0444, lon: 31.2357, label: "القاهرة (افتراضي)", isDefault: true },
     calcMethod: "mwl",
@@ -967,9 +1874,9 @@ function Card({ children, style, onClick, className = "" }) {
       className={className}
       style={{
         background: "var(--surface)",
-        border: "1px solid var(--border)",
+        border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border))",
         borderRadius: 20,
-        boxShadow: "var(--shadow), 0 1px 2px rgba(0,0,0,0.04)",
+        boxShadow: "var(--shadow), 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent), 0 2px 14px color-mix(in srgb, var(--accent) 12%, transparent)",
         transition: "transform .18s ease, box-shadow .18s ease",
         cursor: onClick ? "pointer" : "default",
         ...style,
@@ -1265,10 +2172,11 @@ function Home({ state, day, updateDay, prefs, updatePrefs, goTo, streak, welcome
   const shareVerseCard = async () => {
     setSharingCard(true);
     try {
-      const blob = await generateVerseCard(verse, { hero1: P.hero.c1, hero2: P.hero.c2 });
+      const blob = await generateVerseCard(verse);
       const file = new File([blob], "anisk-ayah.png", { type: "image/png" });
+      const shareText = `قال تعالى:\n\n${verse.text}\n\n﴿سورة ${verse.surah}: ${verse.ayahNumber}﴾`;
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "آية اليوم — أنيسك" });
+        await navigator.share({ files: [file], title: "آية اليوم — أنيسك", text: shareText });
       } else {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -1745,7 +2653,7 @@ function btnGhost() {
    Quran — reader, audio, memorization & recitation
    ========================================================================= */
 
-function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightMode, quran, audio }) {
+function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightMode, quran, audio, goTo }) {
   const [screen, setScreen] = useState("list"); // list | reader | reciters | memorize | search
   const [surahId, setSurahId] = useState(1);
   const [flip, setFlip] = useState(null); // 'next' | 'prev' | null
@@ -1756,6 +2664,8 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
   const [markedAyah, setMarkedAyah] = useState(null); // { globalNumber, surahId, surahName, localIndex } | null
   const [ayahTags, setAyahTags] = useState({}); // { [globalNumber]: [tagId,...] }
   const [tagSetup, setTagSetup] = useState(null); // { item } | null — لوحة اختيار العلامات
+  const [shareSetup, setShareSetup] = useState(null); // { item } | null — لوحة اختيار مشاركة نص أو صورة
+  const [sharingImage, setSharingImage] = useState(false);
   const [pageJumpInput, setPageJumpInput] = useState("");
   useEffect(() => { loadReadingPosition().then(setReadingPosition); }, []);
   useEffect(() => { loadMarkedAyah().then(setMarkedAyah); }, []);
@@ -1792,15 +2702,36 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
   const [tafsirText, setTafsirText] = useState(null); // null | 'loading' | 'error' | string
   const [wordMeanings, setWordMeanings] = useState(null); // null | 'loading' | array of {word, meaning}
   const [mushafPage, setMushafPage] = useState(2); // 1..604, real Uthmani mushaf page
+  const [realMushafMode, setRealMushafMode] = useState(true); // المصحف الأساسي في التطبيق = مصحف المدينة الحقيقي (خط QCF4)
+  const [offlineDownload, setOfflineDownload] = useState({ status: "idle", done: 0, total: QCF_TOTAL_PAGES }); // تجهيز المصحف كامل في الخلفية للقراءة بدون نت
   const [hiddenAyahs, setHiddenAyahs] = useState({});
   const [hideSetup, setHideSetup] = useState(null);
+  const toggleHiddenAyah = (item) => {
+    const next = { ...hiddenAyahs };
+    if (next[item.globalNumber]) delete next[item.globalNumber];
+    else next[item.globalNumber] = true;
+    setHiddenAyahs(next);
+    saveHiddenAyahs(next);
+  };
   const [listenSetup, setListenSetup] = useState(null);
   const [listenPanel, setListenPanel] = useState(null);
   const [listenReciterId, setListenReciterId] = useState(prefs.quranReciter);
   const [listenSpeed, setListenSpeed] = useState(1);
-  const listenAudioRef = useRef(null);
+  const listenAudioRef = useRef(ANISK_AYAH_LISTEN_AUDIO);
   const touchStartX = useRef(null);
   useEffect(() => { loadHiddenAyahs().then(setHiddenAyahs); }, []);
+  useEffect(() => {
+    // تجهيز المصحف بالكامل في الخلفية أول مرة يتفتح فيها التطبيق، من غير ما
+    // تحتاجي تدوسي زرار "تنزيل" بنفسك — المصحف واحد بس، وده مجرد تجهيزه
+    // مسبقًا عشان يشتغل بدون نت أسرع.
+    let cancelled = false;
+    downloadFullMushafOffline((done, total) => {
+      if (!cancelled) setOfflineDownload({ status: "downloading", done, total });
+    })
+      .then(() => { if (!cancelled) setOfflineDownload({ status: "done", done: QCF_TOTAL_PAGES, total: QCF_TOTAL_PAGES }); })
+      .catch(() => { if (!cancelled) setOfflineDownload({ status: "error", done: 0, total: QCF_TOTAL_PAGES }); });
+    return () => { cancelled = true; };
+  }, []);
 
   const list = quran.list;
   const surahIndex = list.findIndex((s) => s.id === surahId);
@@ -1984,6 +2915,12 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
   }, [recitation.status]); // eslint-disable-line
   const [tajweedData, setTajweedData] = useState({}); // surahId -> annotations[], populated on demand
   const [tajweedLoading, setTajweedLoading] = useState(false);
+  // التلوين الحرفي لا يمكن أن يُرسم داخل رموز خط QCF المغلقة؛ لذلك يصبح العرض
+  // العثماني الملون هو وضع المصحف تلقائيًا حين يُفعّل التجويد، ويعود خط المدينة
+  // الأصلي فور إغلاقه.
+  useEffect(() => {
+    setRealMushafMode(!prefs.tajweedColoringEnabled);
+  }, [prefs.tajweedColoringEnabled]);
   useEffect(() => {
     if (!prefs.tajweedColoringEnabled) return;
     let cancelled = false;
@@ -2150,8 +3087,8 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
   };
 
   useEffect(() => {
-    const el = new Audio();
-    listenAudioRef.current = el;
+    const el = listenAudioRef.current;
+    if (!el) return;
     const onEnded = () => {
       setListenPanel((p) => {
         if (!p) return null;
@@ -2162,7 +3099,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
     const onError = () => setListenPanel((p) => p ? { ...p, playing: false, error: "تعذّر تشغيل الصوت." } : p);
     el.addEventListener("ended", onEnded);
     el.addEventListener("error", onError);
-    return () => { el.removeEventListener("ended", onEnded); el.removeEventListener("error", onError); el.pause(); };
+    return () => { el.removeEventListener("ended", onEnded); el.removeEventListener("error", onError); /* لا نوقف الصوت عند تغيير التبويب */ };
   }, []);
   useEffect(() => {
     if (!listenPanel?.playing || !listenAudioRef.current) return;
@@ -2265,6 +3202,20 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
         <TopBarBack onBack={() => setScreen("list")} title="القرآن الكريم" right={
           <button onClick={() => setNightMode(!nightMode)} style={iconBtn()}><Moon size={17} color={nightMode ? "var(--accent)" : "var(--textDim)"} /></button>
         } />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 4px 10px" }}>
+          <span style={{
+            fontSize: 11, color: nightMode ? "#C9A66B" : "var(--accent)", fontFamily: "'Cairo', sans-serif", fontWeight: 700,
+            border: `1px solid ${nightMode ? "#4a4636" : "var(--accent)"}`, borderRadius: 20, padding: "3px 12px",
+          }}>
+            الجزء {juzForGlobal(pgStart)}
+          </span>
+          <span style={{
+            fontSize: 11, color: nightMode ? "#C9A66B" : "var(--accent)", fontFamily: "'Cairo', sans-serif", fontWeight: 700,
+            border: `1px solid ${nightMode ? "#4a4636" : "var(--accent)"}`, borderRadius: 20, padding: "3px 12px",
+          }}>
+            الحزب {hizbForGlobal(pgStart)}
+          </span>
+        </div>
         <div
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
@@ -2275,8 +3226,8 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             border: `1px solid ${nightMode ? "#3a3627" : "var(--accent)"}`,
             outline: `1px solid ${nightMode ? "#241f14" : "var(--border)"}`,
             outlineOffset: -6,
-            borderRadius: 20,
-            padding: "26px 22px 44px", minHeight: 380, position: "relative", overflow: "hidden",
+            borderRadius: 16,
+            padding: "14px 10px 24px", minHeight: 380, position: "relative", overflow: "hidden",
             boxShadow: nightMode ? "var(--shadow)" : "0 14px 34px rgba(60,50,30,0.10), inset 0 0 40px rgba(60,50,30,0.03)",
             perspective: 1200, touchAction: "pan-y", cursor: "grab", userSelect: "none",
           }}
@@ -2286,35 +3237,35 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             opacity: flip ? 0.35 : 1, transition: "transform .26s ease, opacity .26s ease", transformOrigin: flip === "next" ? "right" : "left",
             boxShadow: flip ? (flip === "next" ? "-18px 0 30px -20px rgba(0,0,0,0.35)" : "18px 0 30px -20px rgba(0,0,0,0.35)") : "none",
           }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-              <span style={{
-                fontSize: 11, color: nightMode ? "#C9A66B" : "var(--accent)", fontFamily: "'Cairo', sans-serif", fontWeight: 700,
-                border: `1px solid ${nightMode ? "#4a4636" : "var(--accent)"}`, borderRadius: 20, padding: "3px 12px",
-              }}>
-                الجزء {juzForGlobal(pgStart)}
-              </span>
-              <span style={{
-                fontSize: 11, color: nightMode ? "#C9A66B" : "var(--accent)", fontFamily: "'Cairo', sans-serif", fontWeight: 700,
-                border: `1px solid ${nightMode ? "#4a4636" : "var(--accent)"}`, borderRadius: 20, padding: "3px 12px",
-              }}>
-                الحزب {hizbForGlobal(pgStart)}
-              </span>
+            <div style={{ textAlign: "center", marginBottom: 10 }}>
+              {realMushafMode ? (
+                <span
+                  title="مصحف المدينة النبوية — بيتجهّز في الخلفية عشان يشتغل بدون نت"
+                  style={{ fontSize: 10, color: nightMode ? "#5f5c4d" : "#b7ac8f", fontFamily: "'Cairo', sans-serif" }}
+                >
+                  {offlineDownload.status === "downloading" ? `⏳ بيتجهّز للقراءة بدون نت… ${offlineDownload.done}/${offlineDownload.total}` : ""}
+                </span>
+              ) : (
+                <span style={{ fontSize: 10.5, color: nightMode ? "#8f8a72" : "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>
+                  مصحف عثماني ملوّن بأحكام التجويد
+                </span>
+              )}
             </div>
-            {mushafPage === 1 && prefs.tajweedColoringEnabled && (
-              <div style={{ marginBottom: 18, padding: 12, borderRadius: 10, background: "var(--accentSoft)", border: "1px solid var(--border)" }}>
-                <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>🖍️ مفتاح ألوان أحكام التجويد</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px 10px" }}>
-                  {TAJWEED_LEGEND.map((l, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ width: 12, height: 12, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: 10.5, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>{l.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* نص متدفق متصل تمامًا كما في المصحف — الإخفاء يتم داخل السطر بدون كسر التخطيط */}
-            <div style={{ textAlign: "justify", lineHeight: 2.6, fontFamily: "'Amiri', serif" }}>
+
+            {realMushafMode ? (
+              <MushafRealPage
+                pageNum={mushafPage}
+                pageItems={pageItems}
+                markedAyah={markedAyah}
+                ayahTags={ayahTags}
+                hiddenAyahs={hiddenAyahs}
+                onToggleHiddenAyah={toggleHiddenAyah}
+                nightMode={nightMode}
+                onOpenAyahMenu={(item) => setAyahMenu({ item, mode: "menu" })}
+              />
+            ) : (
+            /* نص متدفق متصل تمامًا كما في المصحف — الإخفاء يتم داخل السطر بدون كسر التخطيط */
+            <div style={{ textAlign: "justify", lineHeight: 2.6, fontFamily: "'Amiri', serif", fontWeight: 600, WebkitTextStroke: nightMode ? "0.4px currentColor" : "0.35px currentColor" }}>
               {pageItems.map((a) => {
                 const g = a.globalNumber;
                 const showSurahHeader = a.surahId !== lastRenderedSurah && a.localIndex === 0;
@@ -2344,9 +3295,9 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                       </div>
                     )}
                     {isHidden ? (
-                      /* إخفاء الآية مع الحفاظ على نفس النص، العرض، التفاف الأسطر، والمساحة تمامًا.
-                         لا نستبدلها بمربع: النص نفسه موجود لكنه شفاف، وتظهر خطوط مكانه.
-                         الضغط على أي جزء من الآية يعيد النص فورًا. */
+                      /* إخفاء الكلمات مع الحفاظ على أبعاد الآية نفسها: كل كلمة تصبح
+                         خطًا متقطعًا مستقلًا، بينما النص الأصلي يظل موجودًا بشفافية
+                         حتى لا يتغير التفاف السطر أو المسافات أو مكان رقم الآية. */
                       <span
                         onClick={() => {
                           const next = { ...hiddenAyahs };
@@ -2358,6 +3309,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                         aria-label={`إظهار الآية ${a.localIndex + 1}`}
                         style={{
                           fontSize: nightMode ? 23 : 22,
+                          fontWeight: 600,
                           lineHeight: 2.6,
                           color: "transparent",
                           borderRadius: 4,
@@ -2366,18 +3318,24 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                           display: "inline",
                           boxDecorationBreak: "clone",
                           WebkitBoxDecorationBreak: "clone",
-                          // يبقى النص الحقيقي موجودًا حتى تظل المساحة والتفاف السطور مطابقين للآية الأصلية.
-                          textDecorationLine: "underline",
-                          textDecorationStyle: "solid",
-                          textDecorationThickness: "2px",
-                          textDecorationColor: nightMode ? "#8a7a4d" : "var(--accent)",
-                          textUnderlineOffset: "7px",
                           transition: "opacity .15s",
                         }}
                       >
-                        {a.text}
+                        {a.text.trim().split(/\s+/).map((word, wi, words) => (
+                          <React.Fragment key={`${g}-hidden-${wi}`}>
+                            <span style={{
+                              display: "inline-block",
+                              color: "transparent",
+                              borderBottom: `2px dashed ${nightMode ? "#8a7a4d" : "var(--accent)"}`,
+                              padding: "0 2px 1px",
+                              lineHeight: 1.35,
+                              verticalAlign: "baseline",
+                            }}>{word}</span>
+                            {wi < words.length - 1 ? " " : ""}
+                          </React.Fragment>
+                        ))}
                         {" "}
-                        <span style={{ color: "var(--accent)", fontSize: 13, textDecoration: "none", display: "inline-block" }}>﴿{a.localIndex + 1}﴾</span>
+                        <span style={{ color: "var(--accent)", fontSize: 13, backgroundImage: "none", display: "inline-block", border: "none" }}>﴿{a.localIndex + 1}﴾</span>
                         {"  "}
                       </span>
                     ) : (
@@ -2389,7 +3347,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                         onMouseUp={cancelLongPress}
                         onMouseLeave={cancelLongPress}
                         style={{
-                          fontSize: nightMode ? 23 : 22, color: nightMode ? "#EBE1C6" : "var(--text)",
+                          fontSize: nightMode ? 23 : 22, fontWeight: 600, color: nightMode ? "#EBE1C6" : "var(--text)",
                           background: (audioSurahOnPage && audio.player.surahId === a.surahId && audio.player.ayahIndex === a.localIndex) || (tafsirGlobal === g && tafsirText)
                             ? "var(--accentSoft)"
                             : "transparent",
@@ -2478,7 +3436,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                             title="اضغطي لتعديل علامات هذه الآية"
                             style={{ display: "inline-flex", verticalAlign: "middle", margin: "0 2px", cursor: "pointer", fontSize: 12 }}
                           >
-                            {ayahTags[g].map((tid) => AYAH_TAG_TYPES.find((t) => t.id === tid)?.icon).join("")}
+                            {ayahTags[g].map((tid) => <AyahTagIcon key={tid} type={tid} size={11} />)}
                           </span>
                         )}
                         {"  "}
@@ -2488,6 +3446,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                 );
               })}
             </div>
+            )}
           </div>
           {wordPopup && (
             <div
@@ -2553,7 +3512,10 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                     action: () => { setTagSetup({ item: ayahMenu.item }); setAyahMenu(null); },
                   },
                   { label: "تكرار الآيات", icon: "🔁", angle: 180, action: () => { const it = ayahMenu.item; setAyahMenu(null); setRepeatSetup({ item: it, fromAyah: it.localIndex + 1, toAyah: it.localIndex + 1, count: 5, speed: 1 }); } },
-                  { label: "مشاركة", icon: "↗", angle: 225, action: () => { const it = ayahMenu.item; setAyahMenu(null); if (navigator.share) navigator.share({ title: `آية ${it.localIndex + 1} من سورة ${it.surahName}`, text: it.text }).catch(() => {}); } },
+                  {
+                    label: "مشاركة", icon: "↗", angle: 225,
+                    action: () => { const it = ayahMenu.item; setAyahMenu(null); setShareSetup({ item: it }); },
+                  },
                 ].map((o) => {
                   const rad = o.angle * Math.PI / 180;
                   const x = 50 + Math.cos(rad) * 35;
@@ -2678,6 +3640,68 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             </div>
           )}
 
+          {shareSetup && (
+            <div style={{ position: "absolute", insetInline: 16, bottom: 14, background: "var(--surface)", border: "1px solid var(--accent)", borderRadius: 16, padding: 14, boxShadow: "0 10px 28px rgba(0,0,0,.2)", zIndex: 9 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <b style={{ fontFamily: "'Cairo', sans-serif", fontSize: 13 }}>↗ مشاركة الآية {shareSetup.item.localIndex + 1}</b>
+                <X size={16} color="var(--textDim)" style={{ cursor: "pointer" }} onClick={() => setShareSetup(null)} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={async () => {
+                    const it = shareSetup.item;
+                    setShareSetup(null);
+                    const shareText = `قال تعالى:\n\n${it.text}\n\n﴿سورة ${it.surahName}: ${it.localIndex + 1}﴾\n\nمشاركة من تطبيق أنيسك`;
+                    if (navigator.share) {
+                      try { await navigator.share({ title: `آية ${it.localIndex + 1} من سورة ${it.surahName}`, text: shareText }); return; } catch { /* تجاهل */ }
+                    }
+                    try { await navigator.clipboard?.writeText(shareText); } catch { /* تجاهل */ }
+                  }}
+                  style={{ ...btnGhost(), flex: 1, justifyContent: "center", flexDirection: "column", gap: 6, padding: "16px 10px", height: "auto" }}
+                >
+                  <span style={{ fontSize: 22 }}>📝</span>
+                  <span>مشاركة كنص</span>
+                </button>
+                <button
+                  disabled={sharingImage}
+                  onClick={async () => {
+                    const it = shareSetup.item;
+                    setSharingImage(true);
+                    const shareText = `قال تعالى:\n\n${it.text}\n\n﴿سورة ${it.surahName}: ${it.localIndex + 1}﴾\n\nمشاركة من تطبيق أنيسك`;
+                    let blob = null;
+                    try { blob = await generateVerseCardQCF(it); }
+                    catch { try { blob = await generateVerseCard({ text: it.text, ayahNumber: it.localIndex + 1, surah: it.surahName }); } catch { /* تجاهل */ } }
+                    setSharingImage(false);
+                    setShareSetup(null);
+                    if (blob && navigator.share && navigator.canShare) {
+                      try {
+                        const file = new File([blob], "anisk-ayah.png", { type: "image/png" });
+                        if (navigator.canShare({ files: [file] })) {
+                          await navigator.share({ files: [file], title: `آية ${it.localIndex + 1} من سورة ${it.surahName}`, text: shareText });
+                          return;
+                        }
+                      } catch { /* تجاهل ونزل للتنزيل المباشر تحت */ }
+                    }
+                    // احتياطي شغال دايمًا: تنزيل الصورة مباشرة — مهم خصوصًا وقت التطوير المحلي
+                    // (زي فتح التطبيق من عنوان IP بدل localhost أو HTTPS) حيث navigator.share
+                    // مش متاح خالص لأسباب أمنية في المتصفح.
+                    if (blob) {
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url; a.download = "anisk-ayah.png";
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }
+                  }}
+                  style={{ ...btnPrimarySmall(), flex: 1, justifyContent: "center", flexDirection: "column", gap: 6, padding: "16px 10px", height: "auto", opacity: sharingImage ? 0.6 : 1 }}
+                >
+                  <span style={{ fontSize: 22 }}>{sharingImage ? "⏳" : "🖼️"}</span>
+                  <span>مشاركة كصورة</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {listenSetup && (
             <div style={{ position: "absolute", insetInline: 16, bottom: 14, background: "var(--surface)", border: "1px solid var(--accent)", borderRadius: 16, padding: 14, boxShadow: "0 10px 28px rgba(0,0,0,.2)", zIndex: 9 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -2788,6 +3812,28 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             </div>
           )}
         </div>
+        {prefs.tajweedColoringEnabled && (
+          <div dir="rtl" style={{
+            margin: "8px 2px 0", padding: "5px 7px", borderRadius: 8,
+            background: nightMode ? "rgba(201,166,107,.045)" : "rgba(176,141,87,.045)",
+            border: `1px solid ${nightMode ? "rgba(201,166,107,.16)" : "rgba(176,141,87,.16)"}`,
+            overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch",
+          }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 7, minWidth: "max-content",
+              fontFamily: "'Cairo', sans-serif", color: "var(--textDim)",
+            }}>
+              <span style={{ fontSize: 9, fontWeight: 800, flexShrink: 0 }}>🖍️ التجويد</span>
+              <span style={{ width: 1, height: 13, background: "currentColor", opacity: .18, flexShrink: 0 }} />
+              {TAJWEED_LEGEND.map((l, i) => (
+                <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 8.5, whiteSpace: "nowrap", flexShrink: 0 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
+                  {l.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "center", marginTop: -14, position: "relative", zIndex: 2 }}>
           <span style={{
             background: nightMode ? "#1a160e" : "var(--accentSoft)", border: `1px solid ${nightMode ? "#3a3627" : "var(--accent)"}`,
@@ -2976,7 +4022,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
           <p style={{ textAlign: "center", fontSize: 12, color: "var(--danger)", marginTop: 10, fontFamily: "'Cairo', sans-serif" }}>{audio.player.errorMsg}</p>
         )}
         <p style={{ textAlign: "center", fontSize: 11.5, color: "var(--textDim)", marginTop: 10, fontFamily: "'Cairo', sans-serif" }}>
-          {quran.status === "live" ? "النص من مصدر قرآني موثّق (alquran.cloud)." : "نص محلي موثّق من جزء عمّ — القرآن كامل يتوفر تلقائيًا عند تشغيل التطبيق خارج بيئة المعاينة."}
+          {quran.status === "live" ? "الرسم العثماني موافق لمصحف المدينة النبوية (طبعة ١٤٢١هـ) — نص alquran.cloud، وترقيم الصفحات مطابق للمصحف المطبوع القياسي (٦٠٤ صفحة)." : "نص محلي موثّق من جزء عمّ — القرآن كامل يتوفر تلقائيًا عند تشغيل التطبيق خارج بيئة المعاينة."}
         </p>
       </div>
     );
@@ -2985,6 +4031,11 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
   return (
     <div>
       <SectionTitle right={<button onClick={() => setScreen("reciters")} style={btnGhost()}><ListMusic size={14} /> القارئ</button>}>القرآن</SectionTitle>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, padding: 4, background: "var(--surfaceAlt)", borderRadius: 14, marginBottom: 14 }}>
+        <button onClick={() => {}} style={{ border: "none", borderRadius: 10, padding: "8px 6px", background: "var(--surface)", color: "var(--primary)", fontFamily: "'Cairo', sans-serif", fontSize: 11.5, fontWeight: 700, boxShadow: "0 1px 5px rgba(0,0,0,.06)" }}>📖 القرآن الكريم</button>
+        <button onClick={() => goTo?.("listen")} style={{ border: "none", borderRadius: 10, padding: "8px 6px", background: "transparent", color: "var(--textDim)", fontFamily: "'Cairo', sans-serif", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>🎧 الاستماع والراديو</button>
+      </div>
 
       <button onClick={() => setScreen("search")} style={{ ...btnGhost(), width: "100%", justifyContent: "center", marginBottom: 14 }}>
         🔍 ابحثي عن كلمة أو آية في القرآن كله
@@ -3025,6 +4076,8 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
         {prefs.tajweedColoringEnabled && (
           <p style={{ fontSize: 11, color: "var(--textDim)", lineHeight: 1.7, margin: "10px 0 0" }}>
             أول مرة تفتحي فيها آية، هيتحمّل ملف الأحكام لسورتها من مصدر خارجي (يحتاج نت أول مرة بس لكل سورة). مفتاح الألوان هتلاقيه في أول صفحة من المصحف.
+            <br /><br />
+            عند تفعيل التجويد، تتحول شاشة القراءة تلقائيًا إلى النص العثماني الملوّن داخل إطار المصحف نفسه؛ وعند إيقافه يعود مصحف المدينة بخطه الأصلي.
           </p>
         )}
       </Card>
@@ -3236,80 +4289,323 @@ function buildRuqyahGlobalList() {
   return out;
 }
 
+// تحميل صوت السور للاستماع بدون إنترنت — بيستخدم Cache API (نفس التقنية اللي
+// بيستخدمها Service Worker) عشان يخزّن الملف الصوتي فعليًا على الجهاز. مختلف عن
+// localStorage (سعته صغيرة جدًا ومش مناسبة لملفات صوت) — الـ Cache API مصمَّم
+// تحديدًا لتخزين استجابات HTTP كبيرة زي الصوت والفيديو.
+const OFFLINE_AUDIO_CACHE = "anisk-offline-audio-v1";
+function offlineAudioKey(reciterId, surahId) { return `https://anisk.offline/${reciterId}/${surahId}.mp3`; }
+async function isSurahDownloaded(reciterId, surahId) {
+  if (typeof caches === "undefined") return false;
+  try {
+    const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+    const match = await cache.match(offlineAudioKey(reciterId, surahId));
+    return !!match;
+  } catch { return false; }
+}
+async function downloadSurahOffline(reciterId, surahId, url) {
+  if (typeof caches === "undefined") throw new Error("offline-storage-unsupported");
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("download-failed");
+  // نتأكد إن المحتوى اللي هنحفظه فعلًا صوت حقيقي مش استجابة فاضية/تالفة (زي لو
+  // الخادم رفض الطلب برد فارغ من غير ما يفشل الطلب نفسه بوضوح) — قبل ما نأكّد
+  // للمستخدمة إن التحميل نجح.
+  const blob = await res.blob();
+  if (!blob || blob.size < 2000) throw new Error("download-invalid");
+  const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+  await cache.put(offlineAudioKey(reciterId, surahId), new Response(blob, { headers: res.headers }));
+}
+async function deleteOfflineSurah(reciterId, surahId) {
+  if (typeof caches === "undefined") return;
+  try {
+    const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+    await cache.delete(offlineAudioKey(reciterId, surahId));
+  } catch { /* تجاهل */ }
+}
+async function getOfflineSurahUrl(reciterId, surahId) {
+  if (typeof caches === "undefined") return null;
+  try {
+    const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+    const match = await cache.match(offlineAudioKey(reciterId, surahId));
+    if (!match) return null;
+    const blob = await match.blob();
+    // لو النسخة المخزّنة فاضية أو تالفة لأي سبب، نتصرّف كأنها مش موجودة أصلًا
+    // (بدل ما نرجّع رابط هيفشل وقت التشغيل) — فالكود اللي بينادينا يرجع تلقائيًا
+    // للتشغيل من الإنترنت بدل ما يوقف برسالة خطأ.
+    if (!blob || blob.size < 2000) {
+      await cache.delete(offlineAudioKey(reciterId, surahId));
+      return null;
+    }
+    return URL.createObjectURL(blob);
+  } catch { return null; }
+}
+
 const LISTEN_SPEEDS = [0.75, 0.9, 1, 1.1, 1.25, 1.5];
 
-function ListenHub({ quran, prefs, updatePrefs }) {
+// مشغلات الاستماع والراديو معمولة مرة واحدة على مستوى التطبيق كله، مش داخل
+// ListenHub. كده لما المستخدمة تنتقل بين التبويبات، المكوّن ممكن يتفك ويتركب
+// من جديد لكن الصوت نفسه يفضل شغال.
+const ANISK_LISTEN_AUDIO = typeof Audio !== "undefined" ? new Audio() : null;
+const ANISK_AYAH_LISTEN_AUDIO = typeof Audio !== "undefined" ? new Audio() : null;
+const ANISK_RADIO_AUDIO = typeof Audio !== "undefined" ? new Audio() : null;
+if (ANISK_RADIO_AUDIO) ANISK_RADIO_AUDIO.referrerPolicy = "no-referrer";
+
+const ANISK_LISTEN_SESSION = {
+  playingSurah: null,
+  status: "idle",
+  queue: null,
+  speed: 1,
+  ruqyahIndex: null,
+  radioPlaying: false,
+  radioStatus: "idle",
+  radioSource: "primary",
+};
+
+const PLAYLISTS_STORAGE_KEY = "anisk-listen-playlists-v1";
+
+function loadListenPlaylistsSync() {
+  try {
+    const raw = localStorage.getItem(PLAYLISTS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch {}
+  return [
+    { id: "sleep", name: "قبل النوم", ids: [] },
+    { id: "memorize", name: "الحفظ", ids: [] },
+  ];
+}
+
+function saveListenPlaylistsSync(playlists) {
+  try { localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(playlists)); } catch {}
+}
+
+function ListenHub({ quran, prefs, updatePrefs, goTo }) {
   const [reciterId, setReciterId] = useState(prefs.reciter);
-  const [playingSurah, setPlayingSurah] = useState(null); // surah id currently playing/loading
-  const [status, setStatus] = useState("idle"); // idle | loading | playing | paused | error
+  const [playingSurah, setPlayingSurah] = useState(ANISK_LISTEN_SESSION.playingSurah);
+  const [status, setStatus] = useState(ANISK_LISTEN_SESSION.status); // idle | loading | playing | paused | error
   const [errorMsg, setErrorMsg] = useState("");
   const [search, setSearch] = useState("");
-  const [ruqyahIndex, setRuqyahIndex] = useState(null); // null = not playing ruqyah; else index into RUQYAH_SEQUENCE flat list
-  const [radioPlaying, setRadioPlaying] = useState(false);
-  const [radioStatus, setRadioStatus] = useState("idle"); // idle | loading | playing | error
-  const [queue, setQueue] = useState(null); // { ids: [surahId,...], index } — تشغيل متسلسل لعدة سور
-  const [speed, setSpeed] = useState(1); // سرعة التشغيل: مشغّل الاستماع العائم
+  const [ruqyahIndex, setRuqyahIndex] = useState(ANISK_LISTEN_SESSION.ruqyahIndex);
+  const [radioPlaying, setRadioPlaying] = useState(ANISK_LISTEN_SESSION.radioPlaying);
+  const [radioStatus, setRadioStatus] = useState(ANISK_LISTEN_SESSION.radioStatus); // idle | loading | playing | error | offline
+  const [radioSource, setRadioSource] = useState(ANISK_LISTEN_SESSION.radioSource); // "primary" | "fallback"
+  const [queue, setQueue] = useState(ANISK_LISTEN_SESSION.queue);
+  const [speed, setSpeed] = useState(ANISK_LISTEN_SESSION.speed || 1);
   const [rangeFrom, setRangeFrom] = useState(null);
   const [rangeTo, setRangeTo] = useState(null);
   const [playerExpanded, setPlayerExpanded] = useState(false);
   const [playerMode, setPlayerMode] = useState("range"); // "range" | "custom"
-  const [customList, setCustomList] = useState([]); // مصفوفة من IDs بترتيب اختياره هي، مش بالضرورة تسلسلي
+  const [downloadedKeys, setDownloadedKeys] = useState(new Set());
+  const [downloadingKey, setDownloadingKey] = useState(null);
+  const [playlists, setPlaylists] = useState(loadListenPlaylistsSync);
+  const [activePlaylistId, setActivePlaylistId] = useState(() => loadListenPlaylistsSync()[0]?.id || null);
+  const [newPlaylistName, setNewPlaylistName] = useState("");
   const [customSearch, setCustomSearch] = useState("");
-  const radioRef = useRef(null);
-  const audioRef = useRef(null);
+  const [draggedPlaylistIndex, setDraggedPlaylistIndex] = useState(null);
+  const radioRef = useRef(ANISK_RADIO_AUDIO);
+  const audioRef = useRef(ANISK_LISTEN_AUDIO);
   const ruqyahListRef = useRef(buildRuqyahGlobalList());
   // مرايا (refs) لتفادي مشكلة الـ stale closure جوه onEnded، اللي بيتسجَّل مرة واحدة
   // بس عند تركيب المكوّن (mount) — من غيرها onEnded هيفضل شايف القيم القديمة بس
   const ruqyahIndexRef = useRef(null);
   const queueRef = useRef(null);
   const loadAndPlaySurahRef = useRef(null);
-  useEffect(() => { ruqyahIndexRef.current = ruqyahIndex; }, [ruqyahIndex]);
-  useEffect(() => { queueRef.current = queue; }, [queue]);
-  useEffect(() => { if (audioRef.current && status !== "idle") audioRef.current.playbackRate = speed; }, [speed]); // eslint-disable-line
+  useEffect(() => { ruqyahIndexRef.current = ruqyahIndex; ANISK_LISTEN_SESSION.ruqyahIndex = ruqyahIndex; }, [ruqyahIndex]);
+  useEffect(() => { queueRef.current = queue; ANISK_LISTEN_SESSION.queue = queue; }, [queue]);
+  useEffect(() => { ANISK_LISTEN_SESSION.speed = speed; if (audioRef.current && status !== "idle") audioRef.current.playbackRate = speed; }, [speed, status]); // eslint-disable-line
+  useEffect(() => { saveListenPlaylistsSync(playlists); }, [playlists]);
+
+  const activePlaylist = playlists.find((p) => p.id === activePlaylistId) || playlists[0] || null;
+  const customList = activePlaylist?.ids || [];
+
+  const addPlaylist = () => {
+    const name = newPlaylistName.trim();
+    if (!name) return;
+    const id = `playlist-${Date.now()}`;
+    setPlaylists((prev) => [...prev, { id, name, ids: [] }]);
+    setActivePlaylistId(id);
+    setNewPlaylistName("");
+  };
+  const renameActivePlaylist = () => {
+    if (!activePlaylist) return;
+    const name = window.prompt("اسم القائمة الجديدة:", activePlaylist.name);
+    if (!name?.trim()) return;
+    setPlaylists((prev) => prev.map((p) => p.id === activePlaylist.id ? { ...p, name: name.trim() } : p));
+  };
+  const deleteActivePlaylist = () => {
+    if (!activePlaylist || playlists.length <= 1) return;
+    if (!window.confirm(`حذف قائمة «${activePlaylist.name}»؟`)) return;
+    const next = playlists.filter((p) => p.id !== activePlaylist.id);
+    setPlaylists(next);
+    setActivePlaylistId(next[0]?.id || null);
+  };
+  const updateActivePlaylistIds = (ids) => {
+    if (!activePlaylist) return;
+    setPlaylists((prev) => prev.map((p) => p.id === activePlaylist.id ? { ...p, ids } : p));
+  };
+  const addToActivePlaylist = (id) => {
+    if (!activePlaylist || activePlaylist.ids.includes(id)) return;
+    updateActivePlaylistIds([...activePlaylist.ids, id]);
+  };
+  const removeFromActivePlaylist = (index) => {
+    if (!activePlaylist) return;
+    updateActivePlaylistIds(activePlaylist.ids.filter((_, i) => i !== index));
+  };
+  const movePlaylistItem = (from, to) => {
+    if (!activePlaylist || from === to || to < 0 || to >= activePlaylist.ids.length) return;
+    const ids = [...activePlaylist.ids];
+    const [item] = ids.splice(from, 1);
+    ids.splice(to, 0, item);
+    updateActivePlaylistIds(ids);
+  };
 
   useEffect(() => {
-    const el = new Audio();
-    radioRef.current = el;
-    const onPlay = () => setRadioStatus("playing");
-    const onError = () => { setRadioStatus("error"); setRadioPlaying(false); };
+    const el = radioRef.current;
+    if (!el) return;
+    const onPlay = () => { setRadioStatus("playing"); setRadioPlaying(true); ANISK_LISTEN_SESSION.radioStatus = "playing"; ANISK_LISTEN_SESSION.radioPlaying = true; };
+    const onPause = () => { setRadioPlaying(false); ANISK_LISTEN_SESSION.radioPlaying = false; };
+    const onError = () => { setRadioStatus("error"); setRadioPlaying(false); ANISK_LISTEN_SESSION.radioStatus = "error"; ANISK_LISTEN_SESSION.radioPlaying = false; };
     el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
     el.addEventListener("error", onError);
-    return () => { el.removeEventListener("play", onPlay); el.removeEventListener("error", onError); el.pause(); };
+    return () => { el.removeEventListener("play", onPlay); el.removeEventListener("pause", onPause); el.removeEventListener("error", onError); };
   }, []);
 
-  // مصدرين بث حقيقيين وعموميين من واجهة mp3quran.net الرسمية للمطورين (نفس المصدر
-  // المستخدم بالفعل لصوت القراء في التطبيق) — بدل الرابط الخاص القديم اللي كان
-  // شغالًا محليًا بس متعطّلًا بعد الرفع (الأغلب: تقييد الإحالة/Referrer لدومين معيّن
-  // من مزوّد البث، وهو أمر شائع في محطات الراديو الخاصة). المصدر الأساسي عام
-  // (تشكيلة قراء)، والاحتياطي إذاعة القرآن الكريم السعودية — كلاهما مصمَّم
-  // للاستخدام من مواقع/تطبيقات خارجية.
-  const RADIO_PRIMARY = "https://backup.qurango.net/radio/mix";
-  const RADIO_FALLBACK = "https://stream.radiojar.com/0tpy1h0kxtzuv";
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onPlay = () => { setStatus("playing"); ANISK_LISTEN_SESSION.status = "playing"; };
+    const onPause = () => {
+      if (!el.ended) { setStatus("paused"); ANISK_LISTEN_SESSION.status = "paused"; }
+    };
+    const onEnded = () => {
+      if (ruqyahIndexRef.current != null) {
+        const list = ruqyahListRef.current;
+        const next = ruqyahIndexRef.current + 1;
+        if (next >= list.length) { setStatus("idle"); setRuqyahIndex(null); ANISK_LISTEN_SESSION.status = "idle"; }
+        else setRuqyahIndex(next);
+        return;
+      }
+      const q = queueRef.current;
+      if (q) {
+        const nextIdx = q.index + 1;
+        if (nextIdx >= q.ids.length) { setStatus("idle"); setPlayingSurah(null); setQueue(null); ANISK_LISTEN_SESSION.status = "idle"; ANISK_LISTEN_SESSION.playingSurah = null; return; }
+        const nextId = q.ids[nextIdx];
+        setQueue({ ...q, index: nextIdx });
+        setPlayingSurah(nextId);
+        ANISK_LISTEN_SESSION.playingSurah = nextId;
+        loadAndPlaySurahRef.current?.(nextId);
+        return;
+      }
+      setStatus("idle"); setPlayingSurah(null); ANISK_LISTEN_SESSION.status = "idle"; ANISK_LISTEN_SESSION.playingSurah = null;
+    };
+    const onError = () => { setStatus("error"); setErrorMsg("تعذّر تحميل الصوت — تحقّق من الاتصال بالإنترنت."); ANISK_LISTEN_SESSION.status = "error"; };
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    el.addEventListener("ended", onEnded);
+    el.addEventListener("error", onError);
+    return () => {
+      el.removeEventListener("play", onPlay);
+      el.removeEventListener("pause", onPause);
+      el.removeEventListener("ended", onEnded);
+      el.removeEventListener("error", onError);
+      // مهم: لا نوقف الصوت هنا. الانتقال بين التبويبات يفك المكوّن فقط.
+    };
+  }, []);
 
-  const toggleRadio = () => {
-    if (radioPlaying) { radioRef.current.pause(); setRadioPlaying(false); setRadioStatus("idle"); return; }
-    // البث المباشر (زي أي راديو حي) محتاج فعليًا اتصال إنترنت نشط — ده قيد
-    // حقيقي مش خاص بالتطبيق، مفيش راديو حي بيشتغل بدون نت في أي تطبيق. لو الجهاز
-    // أوفلاين، نوضّح ده فورًا بدل ما نحاول ونفشل بصمت، ونقترح البديل المتاح فعليًا
-    // (الاستماع للقرآن اللي سبق سمعتيه وهو متخزّن في الكاش من زيارات سابقة).
+  // مزامنة الواجهة عند الرجوع لتبويب الاستماع إذا كان الصوت لسه شغالًا.
+  useEffect(() => {
+    if (ANISK_LISTEN_SESSION.playingSurah != null) {
+      setPlayingSurah(ANISK_LISTEN_SESSION.playingSurah);
+      setStatus(ANISK_LISTEN_SESSION.status || (audioRef.current?.paused ? "paused" : "playing"));
+    }
+    setQueue(ANISK_LISTEN_SESSION.queue);
+    setSpeed(ANISK_LISTEN_SESSION.speed || 1);
+    setRuqyahIndex(ANISK_LISTEN_SESSION.ruqyahIndex);
+    setRadioPlaying(ANISK_LISTEN_SESSION.radioPlaying);
+    setRadioStatus(ANISK_LISTEN_SESSION.radioStatus);
+    setRadioSource(ANISK_LISTEN_SESSION.radioSource);
+  }, []);
+
+  // مشغلات الاستماع والراديو مشتركة على مستوى التطبيق؛ لا يتم إنشاء Audio جديد
+  // ولا إيقافه عند unmount.
+  useEffect(() => {
+    const el = radioRef.current;
+    if (el) el.referrerPolicy = "no-referrer";
+  }, []);
+
+    // إذاعة القرآن الكريم من القاهرة (٩٣.١ FM) هي الأولوية دايمًا — نفس البث المُستخدم
+  // فعليًا وعلنًا في مواقع إذاعة قرآنية معروفة تانية (زي e-quran.com)، يعني مش رابط
+  // خاص أو مقيّد بدومين معيّن. لو تعطّل لأي سبب، بيتحول تلقائيًا لإذاعة القرآن
+  // الكريم السعودية كاحتياطي (مصدرها الرسمي عبر mp3quran.net).
+  // اتضح إن stream.radiojar.com بيرفض يشتغل تحديدًا من دومينات الاستضافة المجانية
+  // العامة زي *.vercel.app (فشل فعليًا مرتين مع هذا التطبيق، رغم إنه شغال على
+  // مواقع بدومين خاص زي holyquranradio.com) — على الأغلب إجراء مضاد لسوء
+  // الاستخدام من مزوّد البث نفسه. الحل: استخدام مصدر مصمَّم أصلًا لتضمين تطبيقات
+  // خارجية بأي دومين (qurango.net)، بدل مصدر عام بيقيّد حسب الدومين.
+  const RADIO_PRIMARY = "https://stream.radiojar.com/8s5u5tpdtwzuv";
+  const RADIO_FALLBACK = "https://backup.qurango.net/radio/mix";
+
+  const toggleRadio = (forceSource) => {
+    if (radioPlaying && !forceSource) { radioRef.current.pause(); setRadioPlaying(false); setRadioStatus("idle"); ANISK_LISTEN_SESSION.radioPlaying = false; ANISK_LISTEN_SESSION.radioStatus = "idle"; return; }
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       setRadioStatus("offline");
       return;
     }
-    // إيقاف أي صوت تاني شغال عشان ميتصادمش مع البث المباشر
     audioRef.current?.pause();
+    radioRef.current?.pause();
     setRadioStatus("loading");
-    radioRef.current.onerror = null;
-    radioRef.current.src = RADIO_PRIMARY;
-    radioRef.current.onerror = () => {
-      radioRef.current.onerror = null;
-      radioRef.current.src = RADIO_FALLBACK;
-      radioRef.current.play().then(() => setRadioPlaying(true)).catch(() => { setRadioStatus("error"); setRadioPlaying(false); });
+    setRadioPlaying(false);
+    ANISK_LISTEN_SESSION.radioStatus = "loading";
+    ANISK_LISTEN_SESSION.radioPlaying = false;
+
+    const el = radioRef.current;
+    let settled = false;
+    let timer = null;
+
+    // بعض محطات البث المقيّدة بترفض بصمت من غير ما تطلع onerror واضح ولا ترفض
+    // وعد .play() — الطلب بيفضل معلّق من غير أي استجابة حقيقية، فيبان للمستخدمة
+    // إن "شغال" بينما مفيش صوت أصلًا. الحل: نعتمد على حدث "playing" الحقيقي (بيدل
+    // على إن صوت فعليًا بدأ يتشغّل) كدليل نجاح، مش مجرد إن .play() اتنفّذ، ومعاه
+    // مهلة قصوى لو الصوت ما بدأش فعليًا خلال ٦ ثواني.
+    const tryUrl = (url, isFallback) => {
+      setRadioSource(isFallback ? "fallback" : "primary");
+      ANISK_LISTEN_SESSION.radioSource = isFallback ? "fallback" : "primary";
+      el.onerror = null;
+      const onPlaying = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        el.removeEventListener("playing", onPlaying);
+        setRadioPlaying(true);
+        setRadioStatus("idle");
+        ANISK_LISTEN_SESSION.radioPlaying = true;
+        ANISK_LISTEN_SESSION.radioStatus = "playing";
+      };
+      el.addEventListener("playing", onPlaying);
+      el.src = url;
+      el.play().catch(() => {
+        if (settled) return;
+        clearTimeout(timer);
+        el.removeEventListener("playing", onPlaying);
+        if (!isFallback && !forceSource) { settled = false; tryUrl(RADIO_FALLBACK, true); }
+        else { settled = true; setRadioStatus("error"); setRadioPlaying(false); ANISK_LISTEN_SESSION.radioStatus = "error"; ANISK_LISTEN_SESSION.radioPlaying = false; }
+      });
+      if (!isFallback && !forceSource) {
+        timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          el.removeEventListener("playing", onPlaying);
+          el.pause();
+          settled = false;
+          tryUrl(RADIO_FALLBACK, true);
+        }, 6000);
+      }
     };
-    radioRef.current.play().then(() => setRadioPlaying(true)).catch(() => {
-      radioRef.current.src = RADIO_FALLBACK;
-      radioRef.current.play().then(() => setRadioPlaying(true)).catch(() => { setRadioStatus("error"); setRadioPlaying(false); });
-    });
+    if (forceSource === "fallback") tryUrl(RADIO_FALLBACK, true);
+    else tryUrl(RADIO_PRIMARY, false);
   };
 
   useEffect(() => {
@@ -3353,6 +4649,51 @@ function ListenHub({ quran, prefs, updatePrefs }) {
   // قائمة السور المتاحة فعليًا بصوت القارئ الحالي (بعض القراء عندهم مجموعة محدودة فقط)
   const scopedList = reciter?.limitedSurahs ? quran.list.filter((s) => reciter.limitedSurahs.includes(s.id)) : quran.list;
 
+  // كل ما تتغيّر القارئة، نفحص أي سور محمّلة بصوتها فعليًا (Cache API) عشان نعرض
+  // علامة "محمّلة" الصح على القائمة
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (typeof caches === "undefined") return;
+      try {
+        const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+        const keys = await cache.keys();
+        if (cancelled) return;
+        const prefix = `https://anisk.offline/${reciter.id}/`;
+        const found = new Set();
+        keys.forEach((req) => {
+          if (req.url.startsWith(prefix)) {
+            const surahId = Number(req.url.slice(prefix.length).replace(".mp3", ""));
+            found.add(surahId);
+          }
+        });
+        setDownloadedKeys(found);
+      } catch { /* تجاهل */ }
+    })();
+    return () => { cancelled = true; };
+  }, [reciter.id]);
+
+  const downloadSurah = async (surahId) => {
+    if (typeof caches === "undefined" || (typeof window !== "undefined" && !window.isSecureContext)) {
+      setErrorMsg("التحميل للاستماع بدون نت محتاج سياقًا آمنًا (HTTPS) — مش هيشتغل من رابط IP محلي زي 192.168.x.x. جرّبي من الموقع بعد رفعه على Vercel، أو من http://localhost أثناء التطوير.");
+      return;
+    }
+    setDownloadingKey(surahId);
+    try {
+      const url = reciter.archiveBase ? archiveSurahUrl(reciter.archiveBase, surahId)
+        : reciter.mp3q ? mp3QuranSurahUrl(reciter.mp3q, surahId) : surahAudioUrl(reciter.edition, surahId);
+      await downloadSurahOffline(reciter.id, surahId, url);
+      setDownloadedKeys((prev) => new Set(prev).add(surahId));
+    } catch {
+      setErrorMsg("تعذّر تحميل السورة — تأكدي من اتصال الإنترنت وحاولي تاني.");
+    }
+    setDownloadingKey(null);
+  };
+  const removeDownload = async (surahId) => {
+    await deleteOfflineSurah(reciter.id, surahId);
+    setDownloadedKeys((prev) => { const next = new Set(prev); next.delete(surahId); return next; });
+  };
+
   // تشغيل تسلسل آيات الرقية آية آية عند تقدّم ruqyahIndex
   useEffect(() => {
     if (ruqyahIndex == null || !audioRef.current) return;
@@ -3374,33 +4715,59 @@ function ListenHub({ quran, prefs, updatePrefs }) {
 
   // تحميل سورة جديدة من الصفر والتشغيل مباشرة (تُستخدم من playSurah ومن التقدّم
   // التلقائي جوه قائمة الاستماع المتسلسلة "من سورة إلى سورة")
-  const loadAndPlaySurah = (surahId) => {
-    // نجرّب مصدر mp3quran.net الموثّق أولًا لو متاح لهذا القارئ، وإلا نرجع لمصدر islamic.network
-    const primaryUrl = reciter.archiveBase ? archiveSurahUrl(reciter.archiveBase, surahId)
-      : reciter.mp3q ? mp3QuranSurahUrl(reciter.mp3q, surahId) : surahAudioUrl(reciter.edition, surahId);
-    const fallbackUrl = reciter.mp3q && reciter.edition ? surahAudioUrl(reciter.edition, surahId) : null;
+  const loadAndPlaySurah = async (surahId) => {
     setPlayingSurah(surahId);
     setStatus("loading");
-    audioRef.current.src = primaryUrl;
-    audioRef.current.playbackRate = speed;
-    audioRef.current.onerror = null;
-    if (fallbackUrl) {
+    ANISK_LISTEN_SESSION.playingSurah = surahId;
+    ANISK_LISTEN_SESSION.status = "loading";
+
+    const playFromNetwork = () => {
+      const primaryUrl = reciter.archiveBase ? archiveSurahUrl(reciter.archiveBase, surahId)
+        : reciter.mp3q ? mp3QuranSurahUrl(reciter.mp3q, surahId) : surahAudioUrl(reciter.edition, surahId);
+      const fallbackUrl = reciter.mp3q && reciter.edition ? surahAudioUrl(reciter.edition, surahId) : null;
+      audioRef.current.src = primaryUrl;
+      audioRef.current.playbackRate = speed;
+      audioRef.current.onerror = null;
+      if (fallbackUrl) {
+        audioRef.current.onerror = () => {
+          audioRef.current.onerror = null;
+          audioRef.current.src = fallbackUrl;
+          audioRef.current.playbackRate = speed;
+          audioRef.current.play().catch(() => { setStatus("error"); setErrorMsg("تعذّر تشغيل الصوت من أي مصدر."); });
+        };
+      }
+      audioRef.current.play().catch(() => {
+        if (fallbackUrl) {
+          audioRef.current.src = fallbackUrl;
+          audioRef.current.playbackRate = speed;
+          audioRef.current.play().catch(() => { setStatus("error"); setErrorMsg("تعذّر تشغيل الصوت من أي مصدر."); });
+        } else {
+          setStatus("error"); setErrorMsg("تعذّر تشغيل الصوت.");
+        }
+      });
+    };
+
+    // لو السورة محمّلة مسبقًا للاستماع بدون نت، نشغّلها من النسخة المحلية المخزّنة
+    // فورًا — من غير أي طلب شبكة خالص، فتشتغل حتى لو الإنترنت مقطوع تمامًا. ولو
+    // النسخة المحلية فشلت لأي سبب (نادر بعد التحقق من صحتها وقت التحميل)، نرجع
+    // تلقائيًا للتشغيل من الإنترنت بدل ما نوقف برسالة خطأ نهائية.
+    const offlineUrl = await getOfflineSurahUrl(reciter.id, surahId);
+    if (offlineUrl) {
+      audioRef.current.src = offlineUrl;
+      audioRef.current.playbackRate = speed;
       audioRef.current.onerror = () => {
         audioRef.current.onerror = null;
-        audioRef.current.src = fallbackUrl;
-        audioRef.current.playbackRate = speed;
-        audioRef.current.play().catch(() => { setStatus("error"); setErrorMsg("تعذّر تشغيل الصوت من أي مصدر."); });
+        URL.revokeObjectURL(offlineUrl);
+        playFromNetwork();
       };
+      audioRef.current.play().catch(() => {
+        URL.revokeObjectURL(offlineUrl);
+        playFromNetwork();
+      });
+      return;
     }
-    audioRef.current.play().catch(() => {
-      if (fallbackUrl) {
-        audioRef.current.src = fallbackUrl;
-        audioRef.current.playbackRate = speed;
-        audioRef.current.play().catch(() => { setStatus("error"); setErrorMsg("تعذّر تشغيل الصوت من أي مصدر."); });
-      } else {
-        setStatus("error"); setErrorMsg("تعذّر تشغيل الصوت.");
-      }
-    });
+    // نجرّب مصدر mp3quran.net الموثّق أولًا لو متاح لهذا القارئ، وإلا نرجع لمصدر islamic.network
+    playFromNetwork();
   };
   loadAndPlaySurahRef.current = loadAndPlaySurah;
 
@@ -3408,6 +4775,7 @@ function ListenHub({ quran, prefs, updatePrefs }) {
     setErrorMsg("");
     setRuqyahIndex(null);
     setQueue(null); // النقر المباشر على سورة بيلغي أي قائمة استماع متسلسلة كانت شغالة
+    ANISK_LISTEN_SESSION.queue = null;
     radioRef.current?.pause(); setRadioPlaying(false); // إيقاف الإذاعة المباشرة لو شغالة
     if (!reciter?.edition && !reciter?.mp3q && !reciter?.archiveBase) { setStatus("error"); setErrorMsg("لا يتوفر صوت لهذا القارئ حاليًا — جرّب قارئًا آخر."); return; }
     if (playingSurah === surahId) {
@@ -3445,6 +4813,7 @@ function ListenHub({ quran, prefs, updatePrefs }) {
     setRuqyahIndex(null);
     radioRef.current?.pause(); setRadioPlaying(false);
     setQueue({ ids: rangeIds, index: 0 });
+    ANISK_LISTEN_SESSION.queue = { ids: rangeIds, index: 0 };
     loadAndPlaySurah(rangeIds[0]);
   };
 
@@ -3454,6 +4823,7 @@ function ListenHub({ quran, prefs, updatePrefs }) {
     setRuqyahIndex(null);
     radioRef.current?.pause(); setRadioPlaying(false);
     setQueue({ ids: customList, index: 0 });
+    ANISK_LISTEN_SESSION.queue = { ids: customList, index: 0 };
     loadAndPlaySurah(customList[0]);
   };
 
@@ -3464,6 +4834,11 @@ function ListenHub({ quran, prefs, updatePrefs }) {
   return (
     <div>
       <SectionTitle>🎙️ استماع للشيوخ</SectionTitle>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, padding: 4, background: "var(--surfaceAlt)", borderRadius: 14, marginBottom: 14 }}>
+        <button onClick={() => goTo?.("quran")} style={{ border: "none", borderRadius: 10, padding: "8px 6px", background: "transparent", color: "var(--textDim)", fontFamily: "'Cairo', sans-serif", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📖 القرآن الكريم</button>
+        <button onClick={() => {}} style={{ border: "none", borderRadius: 10, padding: "8px 6px", background: "var(--surface)", color: "var(--primary)", fontFamily: "'Cairo', sans-serif", fontSize: 11.5, fontWeight: 700, boxShadow: "0 1px 5px rgba(0,0,0,.06)" }}>🎧 الاستماع والراديو</button>
+      </div>
 
       <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginBottom: 16 }}>
         {RECITERS.map((r) => (
@@ -3583,11 +4958,34 @@ function ListenHub({ quran, prefs, updatePrefs }) {
               </div>
             ) : (
               <div style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                  <select
+                    value={activePlaylistId || ""}
+                    onChange={(e) => setActivePlaylistId(e.target.value)}
+                    style={{ ...inputStyle(), flex: 1, fontSize: 12, padding: "7px 8px" }}
+                  >
+                    {playlists.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.ids.length})</option>)}
+                  </select>
+                  <button onClick={renameActivePlaylist} title="تعديل اسم القائمة" style={{ ...iconBtn(), width: 34, height: 34 }}>✏️</button>
+                  <button onClick={deleteActivePlaylist} disabled={playlists.length <= 1} title="حذف القائمة" style={{ ...iconBtn(), width: 34, height: 34, opacity: playlists.length <= 1 ? 0.4 : 1 }}>🗑️</button>
+                </div>
+
+                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                  <input
+                    value={newPlaylistName}
+                    onChange={(e) => setNewPlaylistName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") addPlaylist(); }}
+                    placeholder="اسم قائمة جديدة: قبل النوم، الحفظ..."
+                    style={{ ...inputStyle(), flex: 1, fontSize: 12, padding: "7px 10px" }}
+                  />
+                  <button onClick={addPlaylist} disabled={!newPlaylistName.trim()} style={{ ...btnPrimarySmall(), padding: "7px 12px", opacity: newPlaylistName.trim() ? 1 : 0.5 }}>+ قائمة</button>
+                </div>
+
                 <div style={{ position: "relative", marginBottom: 8 }}>
                   <input
                     value={customSearch}
                     onChange={(e) => setCustomSearch(e.target.value)}
-                    placeholder="ابحثي عن سورة عشان تضيفيها..."
+                    placeholder={activePlaylist ? `أضيفي سورة إلى «${activePlaylist.name}»...` : "ابحثي عن سورة عشان تضيفيها..."}
                     style={{ ...inputStyle(), width: "100%", fontSize: 12.5, padding: "8px 10px" }}
                   />
                   {customSearch.trim() && (
@@ -3599,11 +4997,11 @@ function ListenHub({ quran, prefs, updatePrefs }) {
                       {scopedList.filter((s) => s.name.includes(customSearch.trim())).slice(0, 8).map((s) => (
                         <div
                           key={s.id}
-                          onClick={() => { setCustomList((list) => [...list, s.id]); setCustomSearch(""); }}
+                          onClick={() => { addToActivePlaylist(s.id); setCustomSearch(""); }}
                           style={{ padding: "8px 10px", cursor: "pointer", fontSize: 12.5, fontFamily: "'Cairo', sans-serif", color: "var(--text)", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                         >
                           <span>{s.name}</span>
-                          <span style={{ color: "var(--primary)", fontSize: 16 }}>+</span>
+                          <span style={{ color: activePlaylist?.ids.includes(s.id) ? "var(--textDim)" : "var(--primary)", fontSize: 16 }}>{activePlaylist?.ids.includes(s.id) ? "✓" : "+"}</span>
                         </div>
                       ))}
                       {scopedList.filter((s) => s.name.includes(customSearch.trim())).length === 0 && (
@@ -3613,29 +5011,40 @@ function ListenHub({ quran, prefs, updatePrefs }) {
                   )}
                 </div>
 
-                {customList.length > 0 ? (
+                {activePlaylist?.ids.length ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
-                    {customList.map((id, idx) => {
+                    {activePlaylist.ids.map((id, idx) => {
                       const s = quran.list.find((x) => x.id === id);
                       return (
-                        <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--surfaceAlt)", borderRadius: 10, padding: "6px 10px" }}>
-                          <span style={{ fontSize: 11, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif", width: 16 }}>{idx + 1}</span>
+                        <div
+                          key={`${id}-${idx}`}
+                          draggable
+                          onDragStart={() => setDraggedPlaylistIndex(idx)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => { e.preventDefault(); if (draggedPlaylistIndex != null) movePlaylistItem(draggedPlaylistIndex, idx); setDraggedPlaylistIndex(null); }}
+                          onDragEnd={() => setDraggedPlaylistIndex(null)}
+                          style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--surfaceAlt)", borderRadius: 10, padding: "6px 8px", cursor: "grab", opacity: draggedPlaylistIndex === idx ? 0.55 : 1 }}
+                        >
+                          <span style={{ fontSize: 11, color: "var(--textDim)", width: 18, textAlign: "center" }}>☷</span>
+                          <span style={{ fontSize: 11, color: "var(--textDim)", width: 16 }}>{idx + 1}</span>
                           <span style={{ flex: 1, fontSize: 12.5, color: "var(--text)", fontFamily: "'Cairo', sans-serif" }}>{s?.name || id}</span>
-                          <X size={13} color="var(--textDim)" style={{ cursor: "pointer" }} onClick={() => setCustomList((list) => list.filter((_, i) => i !== idx))} />
+                          <button onClick={() => movePlaylistItem(idx, idx - 1)} disabled={idx === 0} title="تحريك لأعلى" style={{ ...iconBtn(), width: 26, height: 26, opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
+                          <button onClick={() => movePlaylistItem(idx, idx + 1)} disabled={idx === activePlaylist.ids.length - 1} title="تحريك لأسفل" style={{ ...iconBtn(), width: 26, height: 26, opacity: idx === activePlaylist.ids.length - 1 ? 0.3 : 1 }}>↓</button>
+                          <button onClick={() => removeFromActivePlaylist(idx)} title="حذف من القائمة" style={{ ...iconBtn(), width: 26, height: 26 }}>×</button>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
                   <div style={{ fontSize: 11.5, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif", textAlign: "center", padding: "8px 0" }}>
-                    ابحثي وأضيفي السور اللي عاوزة تسمعيها، بأي ترتيب، وهتتشغّل واحدة ورا التانية بالترتيب ده بالظبط.
+                    أضيفي السور بالبحث، وبعدها تقدري تغيّري ترتيبها بالسحب أو بأسهم ↑ ↓.
                   </div>
                 )}
 
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={startCustomQueue} disabled={!customList.length} style={{ ...btnPrimarySmall(), flex: 1, opacity: customList.length ? 1 : 0.5 }}>▶️ تشغيل القائمة</button>
+                  <button onClick={startCustomQueue} disabled={!customList.length} style={{ ...btnPrimarySmall(), flex: 1, opacity: customList.length ? 1 : 0.5 }}>▶️ تشغيل «{activePlaylist?.name || "القائمة"}»</button>
                   {customList.length > 0 && (
-                    <button onClick={() => setCustomList([])} style={{ ...btnGhost(), padding: "8px 12px" }}>مسح الكل</button>
+                    <button onClick={() => updateActivePlaylistIds([])} style={{ ...btnGhost(), padding: "8px 12px" }}>مسح السور</button>
                   )}
                 </div>
               </div>
@@ -3661,7 +5070,7 @@ function ListenHub({ quran, prefs, updatePrefs }) {
         )}
       </Card>
 
-      <Card onClick={toggleRadio} style={{ padding: "14px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: "linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 75%, black))" }}>
+      <Card onClick={toggleRadio} style={{ padding: "14px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: "linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 75%, black))" }}>
         <div style={{
           width: 40, height: 40, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
           background: "rgba(255,255,255,0.2)", color: "var(--onPrimary)",
@@ -3669,12 +5078,16 @@ function ListenHub({ quran, prefs, updatePrefs }) {
           {radioStatus === "loading" ? <Gauge size={18} /> : radioPlaying ? <Pause size={18} /> : <span style={{ fontSize: 18 }}>📻</span>}
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14, fontWeight: 700, color: "var(--onPrimary)" }}>إذاعة القرآن الكريم</div>
+          <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14, fontWeight: 700, color: "var(--onPrimary)" }}>إذاعة القرآن الكريم{radioSource === "fallback" ? " (عام)" : " — القاهرة"}</div>
           <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.8)" }}>
             {radioStatus === "offline" ? "البث المباشر محتاج إنترنت — جرّبي الاستماع للقرآن من قسم الاستماع بدل الراديو" : radioStatus === "error" ? "تعذّر الاتصال بالإذاعة الآن" : radioPlaying ? "🔴 بث مباشر الآن" : "بث مباشر ٢٤ ساعة"}
           </div>
         </div>
       </Card>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <button onClick={() => toggleRadio("primary")} style={{ ...btnGhost(), flex: 1, justifyContent: "center", fontSize: 11.5, padding: "6px 10px" }}>القاهرة</button>
+        <button onClick={() => toggleRadio("fallback")} style={{ ...btnGhost(), flex: 1, justifyContent: "center", fontSize: 11.5, padding: "6px 10px" }}>عام (احتياطي)</button>
+      </div>
 
       <Card onClick={playRuqyah} style={{ padding: "10px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, cursor: "pointer", background: "var(--accentSoft)" }}>
         <div style={{
@@ -3696,6 +5109,8 @@ function ListenHub({ quran, prefs, updatePrefs }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {filteredList.map((s) => {
           const isThis = playingSurah === s.id;
+          const isDownloaded = downloadedKeys.has(s.id);
+          const isDownloading = downloadingKey === s.id;
           return (
             <Card key={s.id} style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
               <button onClick={() => playSurah(s.id)} style={{
@@ -3707,16 +5122,24 @@ function ListenHub({ quran, prefs, updatePrefs }) {
               </button>
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: "'Reem Kufi', sans-serif", fontSize: 15, color: "var(--text)" }}>سورة {s.name}</div>
-                <div style={{ fontSize: 11.5, color: "var(--textDim)" }}>{s.verses} آيات</div>
+                <div style={{ fontSize: 11.5, color: "var(--textDim)" }}>{s.verses} آيات{isDownloaded ? " · محمّلة للاستماع بدون نت" : ""}</div>
               </div>
               {isThis && status === "error" && <span style={{ fontSize: 11, color: "var(--danger)" }}>خطأ</span>}
+              <button
+                onClick={() => (isDownloaded ? removeDownload(s.id) : downloadSurah(s.id))}
+                disabled={isDownloading}
+                title={isDownloaded ? "حذف النسخة المحمّلة" : "تحميل للاستماع بدون نت"}
+                style={{ ...iconBtn(), width: 32, height: 32, flexShrink: 0, color: isDownloaded ? "var(--primary)" : "var(--textDim)" }}
+              >
+                {isDownloading ? <Gauge size={14} /> : isDownloaded ? <CheckCircle2 size={14} /> : <Download size={14} />}
+              </button>
             </Card>
           );
         })}
       </div>
       {errorMsg && <p style={{ textAlign: "center", fontSize: 12, color: "var(--danger)", marginTop: 12, fontFamily: "'Cairo', sans-serif" }}>{errorMsg} لو فضل مايشتغلش، جرّبي العفاسي أو الحصري أو السديس أو المعيقلي.</p>}
       <p style={{ textAlign: "center", fontSize: 11, color: "var(--textDim)", marginTop: 14, fontFamily: "'Cairo', sans-serif" }}>
-        بث مباشر عند الطلب من مصدر رسمي (cdn.islamic.network) — لا يتم تحميل أو تخزين أي ملفات صوتية داخل التطبيق.
+        بث مباشر عند الطلب من مصدر رسمي (cdn.islamic.network) — دوسي على أيقونة التحميل ↓ بجانب أي سورة عشان تشتغل بدون إنترنت لاحقًا.
       </p>
       <div style={{ height: 24 }} />
     </div>
@@ -3853,12 +5276,23 @@ async function saveMarkedAyah(mark) {
 // وبيتشال تلقائيًا؛ العلامات دي تصنيفية وبتفضل زي ما هي، وممكن الآية الواحدة
 // تاخد أكتر من علامة في نفس الوقت (زي "أحبها" و"للحفظ" مع بعض).
 const AYAH_TAG_TYPES = [
-  { id: "important", label: "آية مهمة", icon: "⭐" },
-  { id: "loved", label: "آية أحبها", icon: "❤️" },
-  { id: "memorize", label: "آية للحفظ", icon: "🧠" },
-  { id: "review", label: "آية للمراجعة", icon: "🔁" },
-  { id: "revisit", label: "أريد الرجوع إليها", icon: "📌" },
+  { id: "important", label: "آية مهمة", icon: "star", color: "#C99A2E" },
+  { id: "loved", label: "آية أحبها", icon: "heart", color: "#E53935" },
+  { id: "memorize", label: "آية للحفظ", icon: "brain", color: "#7B61A8" },
+  { id: "review", label: "آية للمراجعة", icon: "review", color: "#3E7C59" },
+  { id: "revisit", label: "أريد الرجوع إليها", icon: "pin", color: "#B07A2A" },
 ];
+
+function AyahTagIcon({ type, size = 12 }) {
+  const tag = AYAH_TAG_TYPES.find((t) => t.id === type);
+  if (!tag) return null;
+  const props = { size, strokeWidth: 2, color: tag.color, fill: tag.icon === "heart" ? tag.color : "none" };
+  if (tag.icon === "heart") return <Heart {...props} />;
+  if (tag.icon === "brain") return <Brain {...props} />;
+  if (tag.icon === "review") return <RotateCcw {...props} />;
+  if (tag.icon === "pin") return <Pin {...props} />;
+  return <Star {...props} />;
+}
 async function loadAyahTags() {
   try {
     const res = await window.storage.get("unisk:ayah-tags", false);
@@ -4045,7 +5479,7 @@ function useRecitationEngine(ayahs, mode = "training") {
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
-    rec.lang = "ar-SA";
+    rec.lang = "ar-EG";
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
@@ -4537,7 +5971,7 @@ function ZakatCalculator({ onClose }) {
   );
 }
 
-function Ibadah({ day, updateDay }) {
+function Ibadah({ day, updateDay, goTo }) {
   const [showZakat, setShowZakat] = useState(false);
   const toggleArr = (key, i) => {
     const arr = [...day[key]];
@@ -4551,13 +5985,33 @@ function Ibadah({ day, updateDay }) {
 
   const prayersDone = day.prayers.filter(Boolean).length;
   const sunnahDone = day.sunnah.filter(Boolean).length;
-  const totalTasks = PRAYERS.length + SUNNAH.length + 1 + 1; // صلوات + سنن + قيام (أي اختيار) + صدقة (أي اختيار)
-  const doneTasks = prayersDone + sunnahDone + (day.qiyam.length > 0 ? 1 : 0) + (day.charity.length > 0 ? 1 : 0);
+  const qiyamDone = (day.qiyam || []).length > 0;
+  const totalTasks = PRAYERS.length + SUNNAH.length + 1 + 1; // صلوات + سنن + قيام + صدقة
+  const doneTasks = prayersDone + sunnahDone + (qiyamDone ? 1 : 0) + (day.charity.length > 0 ? 1 : 0);
   const pct = day.excused ? dayCompletion(day) : Math.round((doneTasks / totalTasks) * 100);
 
   return (
     <div>
       <SectionTitle>عبادتي</SectionTitle>
+
+      {/* تنقّل واضح بين عباداتي والأذكار بدل إخفاء الأذكار في زر صغير */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+        <div style={{
+          border: "1px solid var(--accent)", background: "var(--accentSoft)", color: "var(--accent)",
+          borderRadius: 15, padding: "11px 12px", display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 7, fontFamily: "'Cairo', sans-serif", fontSize: 12.5, fontWeight: 800, boxShadow: "0 5px 18px rgba(0,0,0,.04)"
+        }}>
+          🤲 عباداتي
+        </div>
+        <button onClick={() => goTo?.("adhkar")} style={{
+          border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
+          borderRadius: 15, padding: "11px 12px", display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 7, fontFamily: "'Cairo', sans-serif", fontSize: 12.5, fontWeight: 800, cursor: "pointer",
+          transition: "all .2s ease"
+        }}>
+          📿 الأذكار
+        </button>
+      </div>
 
       {/* لوحة إنجاز اليوم — أول حاجة تشوفها تبقى مفيدة فورًا */}
       <Card className="anisk-stagger-1" style={{ padding: 22, marginBottom: 22, background: "linear-gradient(160deg, var(--surface), var(--accentSoft))" }}>
@@ -4589,27 +6043,115 @@ function Ibadah({ day, updateDay }) {
         </div>
       </Card>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 2px 10px", opacity: day.excused ? 0.5 : 1 }}>
-        <span style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14.5, color: "var(--text)", fontWeight: 700 }}>🕌 الصلوات المفروضة</span>
-        <span style={{ fontSize: 12.5, color: "var(--accent)", fontFamily: "'Cairo', sans-serif", fontWeight: 700 }}>{day.excused ? "غير واجبة اليوم" : `${prayersDone} / 5`}</span>
+      {/* لوحة الصلوات: 5 أعمدة ثابتة × 3 صفوف — فرض / سنة / جماعة.
+          التصميم يحافظ على كل البيانات الحالية لكن يعرضها في مساحة صغيرة ومرتبة بدل
+          ما كل صلاة تأخذ صفًا كاملًا. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 2px 10px", opacity: day.excused ? 0.55 : 1 }}>
+        <div>
+          <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14.5, color: "var(--text)", fontWeight: 700 }}>🕌 صلواتي اليوم</div>
+          <div style={{ fontSize: 10.5, color: "var(--textDim)", marginTop: 2 }}>فرض · سنة · جماعة</div>
+        </div>
+        <span style={{ fontSize: 12.5, color: "var(--accent)", fontFamily: "'Cairo', sans-serif", fontWeight: 700 }}>{day.excused ? "غير واجبة اليوم" : `${prayersDone} / 5 فرض`}</span>
       </div>
       {day.excused ? (
-        <Card style={{ padding: 18, textAlign: "center" }}>
+        <Card style={{ padding: 18, textAlign: "center", marginBottom: 14 }}>
           <p style={{ fontSize: 12.5, color: "var(--textDim)", margin: 0 }}>لا قضاء للصلاة، اطمئني 🤍</p>
         </Card>
       ) : (
-        <Card style={{ overflow: "hidden" }}>{PRAYERS.map((p, i) => <CheckRow key={p} label={p} checked={day.prayers[i]} onToggle={() => toggleArr("prayers", i)} last={i === PRAYERS.length - 1} />)}</Card>
+        <Card style={{ padding: 10, marginBottom: 14, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "46px repeat(5, minmax(0, 1fr))", gap: 5, direction: "rtl" }}>
+            <div />
+            {PRAYERS.map((p, i) => {
+              const Icon = PRAYER_TIME_ICONS[i];
+              return (
+                <div key={p} style={{ minWidth: 0, textAlign: "center", padding: "7px 2px 8px", borderRadius: 11, background: "var(--surfaceAlt)" }}>
+                  <Icon size={15} color="var(--accent)" style={{ marginBottom: 3 }} />
+                  <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 10.5, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap" }}>{p}</div>
+                </div>
+              );
+            })}
+
+            {[["فرض", "prayers"], ["سنة", "sunnah"], ["جماعة", "jamaah"]].map(([rowLabel, key]) => (
+              <React.Fragment key={key}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Cairo', sans-serif", fontSize: 9.5, fontWeight: 700, color: "var(--textDim)", padding: "6px 0" }}>{rowLabel}</div>
+                {PRAYERS.map((p, i) => {
+                  const hasSunnah = key !== "sunnah" || PRAYER_SUNNAH_LINKS[i].length > 0;
+                  const isSunnah = key === "sunnah";
+                  const done = key === "jamaah" ? !!(day.jamaah || [])[i] : !!day[key][i];
+                  const toggle = () => {
+                    if (isSunnah) {
+                      const links = PRAYER_SUNNAH_LINKS[i];
+                      if (!links.length) return;
+                      const next = [...day.sunnah];
+                      if (links.length === 1) next[links[0].sunnahIndex] = !next[links[0].sunnahIndex];
+                      else next[links[0].sunnahIndex] = !next[links[0].sunnahIndex];
+                      updateDay({ sunnah: next });
+                    } else {
+                      toggleArr(key, i);
+                    }
+                  };
+                  const sunnahLinks = isSunnah ? PRAYER_SUNNAH_LINKS[i] : [];
+                  const sunnahDoneCount = sunnahLinks.filter((x) => !!day.sunnah[x.sunnahIndex]).length;
+
+                  if (isSunnah) {
+                    return (
+                      <div key={`${key}-${p}`} style={{
+                        minWidth: 0, minHeight: 43, borderRadius: 11, border: `1px solid ${sunnahDoneCount > 0 ? "var(--accent)" : "var(--border)"}`,
+                        background: sunnahDoneCount > 0 ? "var(--accentSoft)" : "var(--surface)", display: "flex", alignItems: "center", justifyContent: "center",
+                        gap: 3, padding: 4, opacity: hasSunnah ? 1 : 0.55,
+                      }}>
+                        {sunnahLinks.length === 0 ? (
+                          <span style={{ fontSize: 11, color: "var(--border)" }}>—</span>
+                        ) : (
+                          sunnahLinks.map((link) => {
+                            const linkDone = !!day.sunnah[link.sunnahIndex];
+                            const short = link.label.includes("قبل") ? "ق" : "ب";
+                            return (
+                              <button
+                                key={link.sunnahIndex}
+                                title={link.label}
+                                onClick={() => {
+                                  const next = [...day.sunnah];
+                                  next[link.sunnahIndex] = !next[link.sunnahIndex];
+                                  updateDay({ sunnah: next });
+                                }}
+                                style={{
+                                  width: 25, height: 30, borderRadius: 8, border: `1px solid ${linkDone ? "var(--accent)" : "var(--border)"}`,
+                                  background: linkDone ? "var(--accent)" : "var(--surfaceAlt)", color: linkDone ? "var(--onPrimary)" : "var(--textDim)",
+                                  cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0, padding: 0,
+                                  fontFamily: "'Cairo', sans-serif", fontSize: 8.5, fontWeight: 800,
+                                }}
+                              >
+                                <span style={{ fontSize: 10 }}>{linkDone ? "✓" : short}</span>
+                                <span style={{ fontSize: 6.5, opacity: .85 }}>{short === "ق" ? "قبل" : "بعد"}</span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <button key={`${key}-${p}`} onClick={toggle} disabled={!hasSunnah} style={{
+                      minWidth: 0, minHeight: 43, borderRadius: 11, border: `1px solid ${done ? "var(--accent)" : "var(--border)"}`,
+                      background: done ? "var(--accentSoft)" : "var(--surface)", color: done ? "var(--accent)" : hasSunnah ? "var(--textDim)" : "var(--border)",
+                      cursor: hasSunnah ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontFamily: "'Cairo', sans-serif", padding: 3, position: "relative", opacity: hasSunnah ? 1 : 0.55,
+                    }}>
+                      {done ? <CheckCircle2 size={17} /> : <span style={{ width: 9, height: 9, borderRadius: "50%", border: "1.5px solid currentColor" }} />}
+                    </button>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)", fontSize: 9.5, color: "var(--textDim)", textAlign: "center", fontFamily: "'Cairo', sans-serif" }}>
+            اضغطي على الخانة لتسجيلها · سنة الظهر تشمل قبل/بعد الظهر
+          </div>
+        </Card>
       )}
 
-      {!day.excused && (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "26px 2px 10px" }}>
-            <span style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14.5, color: "var(--text)", fontWeight: 700 }}>🕌 صلاة الجماعة</span>
-            <span style={{ fontSize: 12.5, color: "var(--accent)", fontFamily: "'Cairo', sans-serif", fontWeight: 700 }}>{(day.jamaah || []).filter(Boolean).length} / 5</span>
-          </div>
-          <Card style={{ overflow: "hidden" }}>{PRAYERS.map((p, i) => <CheckRow key={p} label={p} checked={!!(day.jamaah || [])[i]} onToggle={() => toggleArr("jamaah", i)} last={i === PRAYERS.length - 1} />)}</Card>
-        </>
-      )}
 
       {gregorianToHijri(new Date()).month === 9 && (
         <>
@@ -4673,21 +6215,61 @@ function Ibadah({ day, updateDay }) {
         );
       })()}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "26px 2px 10px", opacity: day.excused ? 0.5 : 1 }}>
-        <span style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14.5, color: "var(--text)", fontWeight: 700 }}>✨ السنن الرواتب</span>
-        <span style={{ fontSize: 12.5, color: "var(--accent)", fontFamily: "'Cairo', sans-serif", fontWeight: 700 }}>{sunnahDone} / {SUNNAH.length}</span>
+      {/* نوافل إضافية — لوحة صغيرة موحّدة بدل بطاقات طويلة */}
+      <div style={{ margin: "22px 2px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14.5, color: "var(--text)", fontWeight: 800 }}>🌙 نوافلي الإضافية</div>
+          <div style={{ fontSize: 10.5, color: "var(--textDim)", marginTop: 2 }}>قيام الليل والضحى</div>
+        </div>
+        <span style={{ fontSize: 10.5, color: "var(--textDim)" }}>اختاري ما أنجزتِه</span>
       </div>
-      <Card style={{ overflow: "hidden" }}>{SUNNAH.map((p, i) => <CheckRow key={p} label={p} checked={day.sunnah[i]} onToggle={() => toggleArr("sunnah", i)} last={i === SUNNAH.length - 1} />)}</Card>
 
-      <div style={{ margin: "26px 2px 10px" }}>
-        <span style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14.5, color: "var(--text)", fontWeight: 700 }}>🌙 قيام الليل</span>
-      </div>
-      <Card style={{ padding: "6px 16px", overflow: "hidden" }}>
-        {QIYAM_OPTIONS.map((o, i) => (
-          <CheckRow key={o} label={o} checked={day.qiyam.includes(o)} onToggle={() => toggleMulti("qiyam", o)} last={i === QIYAM_OPTIONS.length - 1} />
-        ))}
+      <Card style={{ padding: 10, overflow: "hidden" }}>
+        <div style={{
+          display: "grid", gridTemplateColumns: "62px repeat(4, minmax(0, 1fr))", gap: 6, direction: "rtl", alignItems: "stretch"
+        }}>
+          <div />
+          {[
+            ["🕌", "صلاة"],
+            ["📿", "استغفار"],
+            ["🤲", "دعاء"],
+            ["📖", "تلاوة قرآن"],
+          ].map(([icon, label]) => (
+            <div key={label} style={{ textAlign: "center", padding: "7px 2px", borderRadius: 10, background: "var(--surfaceAlt)", border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 14, lineHeight: 1.1 }}>{icon}</div>
+              <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 8.5, fontWeight: 800, color: "var(--text)", marginTop: 4, whiteSpace: "nowrap" }}>{label}</div>
+            </div>
+          ))}
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 4, borderRadius: 10, background: "var(--surfaceAlt)", fontFamily: "'Cairo', sans-serif", fontSize: 9.5, fontWeight: 800, color: "var(--textDim)" }}>قيام الليل</div>
+          {["صلاة", "استغفار", "دعاء", "تلاوة القرآن"].map((o) => {
+            const done = (day.qiyam || []).includes(o);
+            return (
+              <button key={o} onClick={() => toggleMulti("qiyam", o)} aria-label={`قيام الليل: ${o}`} style={{
+                minHeight: 44, borderRadius: 11, border: `1px solid ${done ? "var(--accent)" : "var(--border)"}`,
+                background: done ? "var(--accentSoft)" : "var(--surface)", color: done ? "var(--accent)" : "var(--textDim)",
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s ease", padding: 3
+              }}>
+                {done ? <CheckCircle2 size={17} /> : <span style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid currentColor" }} />}
+              </button>
+            );
+          })}
+
+          <div style={{ gridColumn: "1 / -1", height: 1, background: "var(--border)", margin: "2px 0" }} />
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 4, borderRadius: 10, background: "var(--surfaceAlt)", fontFamily: "'Cairo', sans-serif", fontSize: 9.5, fontWeight: 800, color: "var(--textDim)" }}>☀️ الضحى</div>
+          <button onClick={() => updateDay({ duha: !day.duha })} style={{
+            gridColumn: "2 / -1", minHeight: 44, borderRadius: 11, border: `1px solid ${day.duha ? "var(--accent)" : "var(--border)"}`,
+            background: day.duha ? "var(--accentSoft)" : "var(--surface)", color: day.duha ? "var(--accent)" : "var(--textDim)",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px",
+            fontFamily: "'Cairo', sans-serif", fontSize: 11, fontWeight: 800
+          }}>
+            <span>{day.duha ? "تم تسجيل صلاة الضحى اليوم" : "تسجيل صلاة الضحى"}</span>
+            {day.duha ? <CheckCircle2 size={17} /> : <span style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid currentColor" }} />}
+          </button>
+        </div>
       </Card>
-      <p style={{ fontSize: 12, color: "var(--textDim)", margin: "8px 4px", fontFamily: "'Cairo', sans-serif" }}>ولو ركعتين — لا بأس بالقليل المستمر 🤍</p>
+      <p style={{ fontSize: 11, color: "var(--textDim)", margin: "7px 4px", fontFamily: "'Cairo', sans-serif" }}>ولو ركعتين — لا بأس بالقليل المستمر 🤍</p>
 
       <div style={{ margin: "26px 2px 10px" }}>
         <span style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14.5, color: "var(--text)", fontWeight: 700 }}>🤲 صدقة في يومي</span>
@@ -5096,6 +6678,195 @@ const DUA_SITUATIONS = [
   },
 ];
 
+// أحاديث نبوية مصنّفة + أحاديث قدسية — أحاديث معروفة ومشهورة ومتداولة في أغلب
+// كتب ومجموعات الحديث، كل حديث مذكور مصدره العام (بدون الادّعاء بتفاصيل تخريج
+// دقيقة لكل رواية).
+const HADITH_CATEGORIES = [
+  {
+    id: "akhlaq", title: "الأخلاق والآداب", icon: "🌸",
+    hadiths: [
+      { text: "إنما بُعِثْتُ لِأُتَمِّمَ مَكَارِمَ الْأَخْلَاقِ", source: "من حديث النبي ﷺ" },
+      { text: "الْكَلِمَةُ الطَّيِّبَةُ صَدَقَةٌ", source: "متفق عليه" },
+      { text: "مَنْ كَانَ يُؤْمِنُ بِاللَّهِ وَالْيَوْمِ الْآخِرِ فَلْيَقُلْ خَيْرًا أَوْ لِيَصْمُتْ", source: "متفق عليه" },
+      { text: "أَكْمَلُ الْمُؤْمِنِينَ إِيمَانًا أَحْسَنُهُمْ خُلُقًا", source: "رواه الترمذي" },
+      { text: "مَا مِنْ شَيْءٍ أَثْقَلُ فِي مِيزَانِ الْمُؤْمِنِ يَوْمَ الْقِيَامَةِ مِنْ حُسْنِ الْخُلُقِ", source: "رواه الترمذي وأبو داود" },
+      { text: "لَا تَحْقِرَنَّ مِنَ الْمَعْرُوفِ شَيْئًا وَلَوْ أَنْ تَلْقَى أَخَاكَ بِوَجْهٍ طَلْقٍ", source: "رواه مسلم" },
+      { text: "إِيَّاكُمْ وَالظَّنَّ فَإِنَّ الظَّنَّ أَكْذَبُ الْحَدِيثِ، وَلَا تَجَسَّسُوا وَلَا تَحَسَّسُوا", source: "متفق عليه" },
+      { text: "لَيْسَ الشَّدِيدُ بِالصُّرَعَةِ، إِنَّمَا الشَّدِيدُ الَّذِي يَمْلِكُ نَفْسَهُ عِنْدَ الْغَضَبِ", source: "متفق عليه" },
+      { text: "مَنْ لَا يَرْحَمِ النَّاسَ لَا يَرْحَمْهُ اللَّهُ", source: "متفق عليه" },
+      { text: "الْحَيَاءُ لَا يَأْتِي إِلَّا بِخَيْرٍ", source: "متفق عليه" },
+    ],
+  },
+  {
+    id: "worship", title: "العبادة والإيمان", icon: "🕌",
+    hadiths: [
+      { text: "بُنِيَ الْإِسْلَامُ عَلَى خَمْسٍ", source: "متفق عليه" },
+      { text: "الدِّينُ النَّصِيحَةُ", source: "رواه مسلم" },
+      { text: "إِنَّ اللَّهَ لَا يَنْظُرُ إِلَى صُوَرِكُمْ وَأَمْوَالِكُمْ، وَلَكِنْ يَنْظُرُ إِلَى قُلُوبِكُمْ وَأَعْمَالِكُمْ", source: "رواه مسلم" },
+      { text: "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى", source: "متفق عليه" },
+      { text: "أَحَبُّ الْأَعْمَالِ إِلَى اللَّهِ أَدْوَمُهَا وَإِنْ قَلَّ", source: "متفق عليه" },
+      { text: "بَيْنَ الرَّجُلِ وَبَيْنَ الشِّرْكِ وَالْكُفْرِ تَرْكُ الصَّلَاةِ", source: "رواه مسلم" },
+      { text: "الطُّهُورُ شَطْرُ الْإِيمَانِ", source: "رواه مسلم" },
+      { text: "مَنْ صَلَّى الْبَرْدَيْنِ دَخَلَ الْجَنَّةَ", source: "متفق عليه" },
+      { text: "الصَّلَوَاتُ الْخَمْسُ، وَالْجُمُعَةُ إِلَى الْجُمُعَةِ، وَرَمَضَانُ إِلَى رَمَضَانَ، مُكَفِّرَاتٌ لِمَا بَيْنَهُنَّ إِذَا اجْتُنِبَتِ الْكَبَائِرُ", source: "رواه مسلم" },
+    ],
+  },
+  {
+    id: "dealings", title: "المعاملات وحسن الجوار", icon: "🤝",
+    hadiths: [
+      { text: "لَا يُؤْمِنُ أَحَدُكُمْ حَتَّى يُحِبَّ لِأَخِيهِ مَا يُحِبُّ لِنَفْسِهِ", source: "متفق عليه" },
+      { text: "الْمُسْلِمُ مَنْ سَلِمَ الْمُسْلِمُونَ مِنْ لِسَانِهِ وَيَدِهِ", source: "رواه البخاري" },
+      { text: "مَنْ كَانَ يُؤْمِنُ بِاللَّهِ وَالْيَوْمِ الْآخِرِ فَلْيُكْرِمْ جَارَهُ", source: "متفق عليه" },
+      { text: "الْمُؤْمِنُ لِلْمُؤْمِنِ كَالْبُنْيَانِ يَشُدُّ بَعْضُهُ بَعْضًا", source: "متفق عليه" },
+      { text: "مَنْ نَفَّسَ عَنْ مُؤْمِنٍ كُرْبَةً مِنْ كُرَبِ الدُّنْيَا نَفَّسَ اللَّهُ عَنْهُ كُرْبَةً مِنْ كُرَبِ يَوْمِ الْقِيَامَةِ", source: "رواه مسلم" },
+      { text: "لَا يَحِلُّ لِمُسْلِمٍ أَنْ يَهْجُرَ أَخَاهُ فَوْقَ ثَلَاثِ لَيَالٍ", source: "متفق عليه" },
+      { text: "مَنْ غَشَّنَا فَلَيْسَ مِنَّا", source: "رواه مسلم" },
+      { text: "الْيَدُ الْعُلْيَا خَيْرٌ مِنَ الْيَدِ السُّفْلَى", source: "متفق عليه" },
+    ],
+  },
+  {
+    id: "family", title: "الأسرة والرحمة", icon: "🏡",
+    hadiths: [
+      { text: "خَيْرُكُمْ خَيْرُكُمْ لِأَهْلِهِ، وَأَنَا خَيْرُكُمْ لِأَهْلِي", source: "رواه الترمذي" },
+      { text: "ارْحَمُوا مَنْ فِي الْأَرْضِ يَرْحَمْكُمْ مَنْ فِي السَّمَاءِ", source: "رواه الترمذي" },
+      { text: "لَيْسَ مِنَّا مَنْ لَمْ يَرْحَمْ صَغِيرَنَا وَيُوَقِّرْ كَبِيرَنَا", source: "رواه الترمذي" },
+      { text: "رِضَا الرَّبِّ فِي رِضَا الْوَالِدِ، وَسَخَطُ الرَّبِّ فِي سَخَطِ الْوَالِدِ", source: "رواه الترمذي" },
+      { text: "الْجَنَّةُ تَحْتَ أَقْدَامِ الْأُمَّهَاتِ", source: "من حديث النبي ﷺ" },
+      { text: "مَا مِنْ مَوْلُودٍ إِلَّا يُولَدُ عَلَى الْفِطْرَةِ", source: "متفق عليه" },
+      { text: "كُلُّكُمْ رَاعٍ وَكُلُّكُمْ مَسْؤُولٌ عَنْ رَعِيَّتِهِ", source: "متفق عليه" },
+    ],
+  },
+  {
+    id: "heart", title: "الرقائق وأعمال القلوب", icon: "💫",
+    hadiths: [
+      { text: "تَبَسُّمُكَ فِي وَجْهِ أَخِيكَ صَدَقَةٌ", source: "رواه الترمذي" },
+      { text: "احْرِصْ عَلَى مَا يَنْفَعُكَ وَاسْتَعِنْ بِاللَّهِ وَلَا تَعْجَزْ", source: "رواه مسلم" },
+      { text: "الدُّنْيَا سِجْنُ الْمُؤْمِنِ وَجَنَّةُ الْكَافِرِ", source: "رواه مسلم" },
+      { text: "كُنْ فِي الدُّنْيَا كَأَنَّكَ غَرِيبٌ أَوْ عَابِرُ سَبِيلٍ", source: "رواه البخاري" },
+      { text: "مَنْ أَحَبَّ لِقَاءَ اللَّهِ أَحَبَّ اللَّهُ لِقَاءَهُ", source: "متفق عليه" },
+      { text: "اغْتَنِمْ خَمْسًا قَبْلَ خَمْسٍ: شَبَابَكَ قَبْلَ هَرَمِكَ، وَصِحَّتَكَ قَبْلَ سَقَمِكَ...", source: "رواه الحاكم" },
+      { text: "إِنَّ فِي الْجَسَدِ مُضْغَةً إِذَا صَلَحَتْ صَلَحَ الْجَسَدُ كُلُّهُ، أَلَا وَهِيَ الْقَلْبُ", source: "متفق عليه" },
+      { text: "مَا نَقَصَتْ صَدَقَةٌ مِنْ مَالٍ", source: "رواه مسلم" },
+    ],
+  },
+  {
+    id: "quran", title: "فضل القرآن وطلب العلم", icon: "📖",
+    hadiths: [
+      { text: "خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ", source: "رواه البخاري" },
+      { text: "اقْرَءُوا الْقُرْآنَ فَإِنَّهُ يَأْتِي يَوْمَ الْقِيَامَةِ شَفِيعًا لِأَصْحَابِهِ", source: "رواه مسلم" },
+      { text: "مَنْ سَلَكَ طَرِيقًا يَلْتَمِسُ فِيهِ عِلْمًا سَهَّلَ اللَّهُ لَهُ طَرِيقًا إِلَى الْجَنَّةِ", source: "رواه مسلم" },
+      { text: "الْمَاهِرُ بِالْقُرْآنِ مَعَ السَّفَرَةِ الْكِرَامِ الْبَرَرَةِ", source: "متفق عليه" },
+    ],
+  },
+  {
+    id: "salawat", title: "فضل الصلاة على النبي ﷺ", icon: "🤍",
+    hadiths: [
+      { text: "إِنَّ اللَّهَ وَمَلَائِكَتَهُ يُصَلُّونَ عَلَى النَّبِيِّ يَا أَيُّهَا الَّذِينَ آمَنُوا صَلُّوا عَلَيْهِ وَسَلِّمُوا تَسْلِيمًا", source: "سورة الأحزاب — القرآن الكريم" },
+      { text: "مَنْ صَلَّى عَلَيَّ وَاحِدَةً صَلَّى اللَّهُ عَلَيْهِ عَشْرًا", source: "رواه مسلم" },
+      { text: "أَوْلَى النَّاسِ بِي يَوْمَ الْقِيَامَةِ أَكْثَرُهُمْ عَلَيَّ صَلَاةً", source: "رواه الترمذي" },
+      { text: "لَا تَجْعَلُوا بُيُوتَكُمْ قُبُورًا، وَلَا تَجْعَلُوا قَبْرِي عِيدًا، وَصَلُّوا عَلَيَّ فَإِنَّ صَلَاتَكُمْ تَبْلُغُنِي حَيْثُ كُنْتُمْ", source: "رواه أبو داود" },
+      { text: "إِنَّ مِنْ أَفْضَلِ أَيَّامِكُمْ يَوْمَ الْجُمُعَةِ... فَأَكْثِرُوا عَلَيَّ مِنَ الصَّلَاةِ فِيهِ", source: "يوم الجمعة — رواه أبو داود" },
+      { text: "الْبَخِيلُ مَنْ ذُكِرْتُ عِنْدَهُ فَلَمْ يُصَلِّ عَلَيَّ", source: "رواه الترمذي" },
+    ],
+  },
+  {
+    id: "qudsi", title: "الأحاديث القدسية", icon: "✨",
+    hadiths: [
+      { text: "يَا عِبَادِي، إِنِّي حَرَّمْتُ الظُّلْمَ عَلَى نَفْسِي وَجَعَلْتُهُ بَيْنَكُمْ مُحَرَّمًا فَلَا تَظَالَمُوا", source: "حديث قدسي — رواه مسلم" },
+      { text: "أَنَا عِنْدَ ظَنِّ عَبْدِي بِي، وَأَنَا مَعَهُ إِذَا ذَكَرَنِي", source: "حديث قدسي — متفق عليه" },
+      { text: "مَنْ تَقَرَّبَ مِنِّي شِبْرًا تَقَرَّبْتُ مِنْهُ ذِرَاعًا", source: "حديث قدسي — رواه البخاري" },
+      { text: "يَا ابْنَ آدَمَ، أَنْفِقْ أُنْفِقْ عَلَيْكَ", source: "حديث قدسي — متفق عليه" },
+      { text: "يَا عِبَادِي كُلُّكُمْ ضَالٌّ إِلَّا مَنْ هَدَيْتُهُ فَاسْتَهْدُونِي أَهْدِكُمْ", source: "حديث قدسي — رواه مسلم" },
+      { text: "إِذَا تَقَرَّبَ الْعَبْدُ إِلَيَّ شِبْرًا تَقَرَّبْتُ إِلَيْهِ ذِرَاعًا، وَإِذَا أَتَانِي يَمْشِي أَتَيْتُهُ هَرْوَلَةً", source: "حديث قدسي — متفق عليه" },
+      { text: "يَا عِبَادِي، إِنَّكُمْ تُخْطِئُونَ بِاللَّيْلِ وَالنَّهَارِ، وَأَنَا أَغْفِرُ الذُّنُوبَ جَمِيعًا فَاسْتَغْفِرُونِي أَغْفِرْ لَكُمْ", source: "حديث قدسي — رواه مسلم" },
+    ],
+  },
+];
+// قائمة مسطّحة لكل الأحاديث — تُستخدم في تذكير "حديث اليوم" بترتيب ثابت لكل يوم
+// (حسب رقم اليوم في السنة) بدل الاختيار العشوائي، عشان ميتكررش نفس الحديث كتير
+// قريب من بعضه.
+const HADITH_FLAT = HADITH_CATEGORIES.flatMap((c) => c.hadiths.map((h) => ({ ...h, category: c.title })));
+function hadithOfTheDay(date = new Date()) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - start) / 86400000);
+  return HADITH_FLAT[dayOfYear % HADITH_FLAT.length];
+}
+
+function HadithLibrary({ onBack }) {
+  const [openId, setOpenId] = useState(null);
+  const [sharingIdx, setSharingIdx] = useState(null);
+
+  const shareHadithText = (h) => {
+    const text = `${h.text}\n\n(${h.source})\n\nمشاركة من تطبيق أنيسك`;
+    if (navigator.share) navigator.share({ text }).catch(() => {});
+    else { navigator.clipboard?.writeText(text); }
+  };
+
+  const shareHadithImage = async (h, key) => {
+    setSharingIdx(key);
+    try {
+      const T = getTokens("light", "classic");
+      const blob = await generateHadithCard(h, { hero1: T.primary, hero2: T.accent });
+      const file = new File([blob], "anisk-hadith.png", { type: "image/png" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "حديث شريف من أنيسك" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "anisk-hadith.png";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch { /* تجاهل فشل المشاركة */ }
+    setSharingIdx(null);
+  };
+
+  const HadithShareRow = ({ h, k }) => (
+    <div style={{ display: "flex", gap: 14, marginTop: 4 }}>
+      <button onClick={() => shareHadithText(h)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif", fontSize: 11 }}>
+        ↗ مشاركة كنص
+      </button>
+      <button onClick={() => shareHadithImage(h, k)} disabled={sharingIdx === k} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif", fontSize: 11, opacity: sharingIdx === k ? 0.5 : 1 }}>
+        🖼️ مشاركة كصورة
+      </button>
+    </div>
+  );
+
+  return (
+    <div>
+      <TopBarBack onBack={onBack} title="الأحاديث النبوية" />
+      <Card style={{ padding: 16, marginBottom: 16, background: "var(--accentSoft)" }}>
+        <div style={{ fontSize: 11, color: "var(--textDim)", marginBottom: 6 }}>✨ حديث اليوم</div>
+        <p style={{ fontFamily: "'Amiri', serif", fontSize: 16, color: "var(--text)", lineHeight: 2, margin: "0 0 6px" }}>{hadithOfTheDay().text}</p>
+        <p style={{ fontSize: 11, color: "var(--textDim)", margin: "0 0 8px" }}>{hadithOfTheDay().source}</p>
+        <HadithShareRow h={hadithOfTheDay()} k="today" />
+      </Card>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {HADITH_CATEGORIES.map((c) => (
+          <Card key={c.id} style={{ padding: 0, overflow: "hidden" }}>
+            <div onClick={() => setOpenId(openId === c.id ? null : c.id)} style={{ padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 20 }}>{c.icon}</span>
+              <span style={{ flex: 1, fontFamily: "'Cairo', sans-serif", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{c.title}</span>
+              <ChevronDown size={16} color="var(--textDim)" style={{ transform: openId === c.id ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+            </div>
+            {openId === c.id && (
+              <div style={{ padding: "0 16px 16px" }}>
+                {c.hadiths.map((h, i) => (
+                  <div key={i} style={{ padding: 14, background: "var(--surfaceAlt)", borderRadius: 12, marginBottom: 8 }}>
+                    <p style={{ fontFamily: "'Amiri', serif", fontSize: 16, color: "var(--text)", lineHeight: 2, margin: "0 0 8px" }}>{h.text}</p>
+                    <p style={{ fontSize: 11, color: "var(--textDim)", margin: "0 0 8px" }}>{h.source}</p>
+                    <HadithShareRow h={h} k={`${c.id}-${i}`} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DuaLibrary({ onBack }) {
   const [openId, setOpenId] = useState(null);
   const [search, setSearch] = useState("");
@@ -5137,10 +6908,11 @@ function DuaLibrary({ onBack }) {
   );
 }
 
-function AdhkarSection({ day, updateDay, prefs }) {
+function AdhkarSection({ day, updateDay, prefs, goTo }) {
   const [openCat, setOpenCat] = useState(null);
   const [showTasbih, setShowTasbih] = useState(false);
   const [showDuaLib, setShowDuaLib] = useState(false);
+  const [showHadithLib, setShowHadithLib] = useState(false);
   const [doneMap, setDoneMap] = useState({}); // idx -> true, يتصفّر كل ما تفتحي فئة تانية
   const [playingIdx, setPlayingIdx] = useState(null);
   const [autoPlay, setAutoPlay] = useState(false);
@@ -5191,6 +6963,10 @@ function AdhkarSection({ day, updateDay, prefs }) {
     return <DuaLibrary onBack={() => setShowDuaLib(false)} />;
   }
 
+  if (showHadithLib) {
+    return <HadithLibrary onBack={() => setShowHadithLib(false)} />;
+  }
+
   if (cat) {
     return (
       <div>
@@ -5227,6 +7003,26 @@ function AdhkarSection({ day, updateDay, prefs }) {
   return (
     <div>
       <SectionTitle>📿 الأذكار</SectionTitle>
+
+      {/* تنقّل واضح بين عباداتي والأذكار — نفس نمط شاشة عبادتي بالظبط */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+        <button onClick={() => goTo?.("ibadah")} style={{
+          border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
+          borderRadius: 15, padding: "11px 12px", display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 7, fontFamily: "'Cairo', sans-serif", fontSize: 12.5, fontWeight: 800, cursor: "pointer",
+          transition: "all .2s ease",
+        }}>
+          🤲 عباداتي
+        </button>
+        <div style={{
+          border: "1px solid var(--accent)", background: "var(--accentSoft)", color: "var(--accent)",
+          borderRadius: 15, padding: "11px 12px", display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 7, fontFamily: "'Cairo', sans-serif", fontSize: 12.5, fontWeight: 800, boxShadow: "0 5px 18px rgba(0,0,0,.04)",
+        }}>
+          📿 الأذكار
+        </div>
+      </div>
+
       <Card onClick={() => setShowTasbih(true)} style={{ padding: "16px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, marginBottom: 12, background: "linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 78%, black))" }}>
         <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", color: "var(--onPrimary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 20 }}>📿</div>
         <div style={{ flex: 1 }}>
@@ -5240,6 +7036,14 @@ function AdhkarSection({ day, updateDay, prefs }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14.5, color: "var(--text)", fontWeight: 700 }}>أدعية بحسب الموقف</div>
           <div style={{ fontSize: 12, color: "var(--textDim)" }}>قلق، امتحان، سفر، مرض، غضب...</div>
+        </div>
+        <ChevronLeft size={17} color="var(--textDim)" />
+      </Card>
+      <Card onClick={() => setShowHadithLib(true)} style={{ padding: "16px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 12, background: "var(--accentSoft)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 20 }}>📜</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14.5, color: "var(--text)", fontWeight: 700 }}>الأحاديث النبوية</div>
+          <div style={{ fontSize: 12, color: "var(--textDim)" }}>مصنّفة بالموضوع + الأحاديث القدسية</div>
         </div>
         <ChevronLeft size={17} color="var(--textDim)" />
       </Card>
@@ -5288,12 +7092,196 @@ function SeerahScreen({ onBack }) {
   );
 }
 
-function LearnSection({ day, updateDay }) {
-  const [seerahOpen, setSeerahOpen] = useState(false);
-  if (seerahOpen) return <SeerahScreen onBack={() => setSeerahOpen(false)} />;
+// أركان الصلاة — التصنيف الشائع (١٤ ركنًا، بحسب الترتيب المتّبع في أغلب المناهج
+// التعليمية)، مع موضع كل ركن ووقته وفضله حيث ورد نص صريح ومعروف. بعض المذاهب
+// تُصنّف بعض هذه العناصر كواجبات لا أركان، فهذا العرض للتعلّم العام لا للترجيح
+// الفقهي الدقيق بين المذاهب.
+const PRAYER_PILLARS = [
+  { n: 1, title: "النية", position: "في القلب، قبل تكبيرة الإحرام مباشرة", detail: "تحديد أي صلاة تنوين أداءها (فرض أم نفل، وأي صلاة بعينها) بقلبك — لا يُشترط التلفّظ بها.", virtue: "الأعمال بالنيات، وإنما لكل امرئ ما نوى." },
+  { n: 2, title: "تكبيرة الإحرام", position: "بداية الصلاة", detail: "قول \"الله أكبر\" واقفة (إن استطعتِ)، وبها تدخلين في الصلاة ويحرم عليكِ ما كان مباحًا خارجها.", virtue: "بها يفتتح باب مناجاة الله في الصلاة." },
+  { n: 3, title: "القيام مع القدرة", position: "في الفرض؛ لكل ركعة قبل الركوع", detail: "الوقوف منتصبة في الفرض لمن تستطيع؛ ومن عجزت صلّت قاعدة أو على جنب حسب حالها.", virtue: null },
+  { n: 4, title: "قراءة الفاتحة", position: "في كل ركعة، بعد تكبيرة الإحرام ودعاء الاستفتاح", detail: "لا تصح الصلاة بدونها للإمام والمنفرد؛ \"لا صلاة لمن لم يقرأ بفاتحة الكتاب\".", virtue: null },
+  { n: 5, title: "الركوع", position: "بعد الفراغ من القراءة في كل ركعة", detail: "الانحناء حتى تستوي الظهر، مع وضع اليدين على الركبتين وقول \"سبحان ربي العظيم\".", virtue: null },
+  { n: 6, title: "الاعتدال من الركوع", position: "بعد الركوع مباشرة", detail: "الرجوع للوقوف المستقيم مع قول \"سمع الله لمن حمده، ربنا ولك الحمد\".", virtue: null },
+  { n: 7, title: "السجود على الأعضاء السبعة", position: "بعد الاعتدال، مرتين كل ركعة", detail: "الجبهة مع الأنف، الكفّان، الركبتان، وأطراف القدمين — مع قول \"سبحان ربي الأعلى\".", virtue: "أقرب ما يكون العبد من ربه وهو ساجد، فأكثروا الدعاء." },
+  { n: 8, title: "الجلوس بين السجدتين", position: "بين كل سجدتين", detail: "الجلوس باطمئنان مع قول \"رب اغفر لي\" قبل السجود الثاني.", virtue: null },
+  { n: 9, title: "الطمأنينة في كل ركن", position: "في الركوع والسجود والاعتدال والجلوس", detail: "السكون قليلًا قبل الانتقال للركن التالي، لا الإسراع الذي يمنع استقرار الجسد.", virtue: "من أساء صلاته بعدم الطمأنينة قيل له: ارجع فصلِّ فإنك لم تصلِّ." },
+  { n: 10, title: "التشهد الأخير", position: "في الجلسة الأخيرة قبل السلام", detail: "قول \"التحيات لله والصلوات والطيبات...\" كاملًا.", virtue: null },
+  { n: 11, title: "الجلوس للتشهد الأخير", position: "آخر الصلاة", detail: "الجلوس المخصوص (التورّك عند كثير من العلماء) لقراءة التشهد الأخير.", virtue: null },
+  { n: 12, title: "الصلاة على النبي ﷺ", position: "في التشهد الأخير، بعد الشهادتين", detail: "\"اللهم صلِّ على محمد وعلى آل محمد...\" كاملة.", virtue: null },
+  { n: 13, title: "التسليمتان", position: "ختام الصلاة", detail: "\"السلام عليكم ورحمة الله\" مرتين، يمينًا ثم شمالًا، وبهما تنتهي الصلاة.", virtue: null },
+  { n: 14, title: "الترتيب بين الأركان", position: "طوال الصلاة", detail: "أداء الأركان بالتسلسل المعروف دون تقديم ركن على آخر عمدًا.", virtue: null },
+];
+// أهمية كل صلاة — تُستخدم في نص إشعار الأذان عشان التذكير يبقى فيه فايدة حقيقية
+// مش مجرد "حان وقت الصلاة" بس.
+const PRAYER_VIRTUE = {
+  "الفجر": "من صلّى الفجر فهو في ذمّة الله — وهي مشهودة تشهدها ملائكة الليل والنهار.",
+  "الظهر": "كان النبي ﷺ يحرص عليها في شدة الحر، ووقتها طويل يسع لصلاة مطمئنة.",
+  "العصر": "من صلاها فكأنما وتر أهله وماله — والمحافظة عليها من أعظم أسباب دخول الجنة.",
+  "المغرب": "وقتها قصير فبادري بها، ومن أدرك ركعة منها قبل خروج وقتها فقد أدركها.",
+  "العشاء": "من صلى العشاء في جماعة فكأنما قام نصف الليل.",
+};
+
+function PrayerPillarsScreen({ onBack }) {
+  const [openN, setOpenN] = useState(null);
   return (
     <div>
-      <SectionTitle>🌿 فَذَكِّرْ إِنْ نَفَعَتِ الذِّكْرَى</SectionTitle>
+      <TopBarBack onBack={onBack} title="أركان الصلاة" />
+      <Card style={{ padding: 16, marginBottom: 16, background: "var(--accentSoft)" }}>
+        <p style={{ fontSize: 12.5, color: "var(--textDim)", lineHeight: 1.8, margin: 0 }}>
+          الأركان هي الأجزاء اللي ما تصحّش الصلاة من غيرها، وما تُجبَر بسجود السهو لو نُسيت — لازم تُفعل. دوسي على أي ركن عشان تشوفي موضعه وتفاصيله.
+        </p>
+      </Card>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {PRAYER_PILLARS.map((p) => (
+          <Card key={p.n} style={{ padding: 0, overflow: "hidden" }}>
+            <div onClick={() => setOpenN(openN === p.n ? null : p.n)} style={{ padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--primary)", color: "var(--onPrimary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, fontWeight: 700 }}>{p.n}</div>
+              <span style={{ flex: 1, fontFamily: "'Cairo', sans-serif", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{p.title}</span>
+              <ChevronDown size={16} color="var(--textDim)" style={{ transform: openN === p.n ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+            </div>
+            {openN === p.n && (
+              <div style={{ padding: "0 16px 16px 58px" }}>
+                <p style={{ fontSize: 11.5, color: "var(--accent)", fontFamily: "'Cairo', sans-serif", fontWeight: 600, margin: "0 0 6px" }}>📍 موضعه: {p.position}</p>
+                <p style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.8, margin: "0 0 8px" }}>{p.detail}</p>
+                {p.virtue && <p style={{ fontSize: 12, color: "var(--textDim)", lineHeight: 1.7, margin: 0, fontStyle: "italic" }}>✨ {p.virtue}</p>}
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// خطوات مناسك العمرة والحج — دليل تعليمي عام يغطي التسلسل المتّفق عليه بين
+// جمهور العلماء (حج التمتّع، الأكثر شيوعًا)، بدون الدخول في خلافات فقهية دقيقة
+// بين المذاهب.
+const UMRAH_STEPS = [
+  { title: "الإحرام من الميقات", detail: "الاغتسال والتطيّب في البدن (لا الثوب) قبل الإحرام، ثم لبس ملابس الإحرام: للرجل إزار ورداء أبيضان بلا خياطة، وللمرأة ملابسها المعتادة الساترة بلا نقاب ولا قفازين. ثم عقد النية بالقلب والتلفّظ: \"لبيك اللهم عمرة\"." },
+  { title: "التلبية", detail: "الإكثار من قول: \"لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لَا شَرِيكَ لَكَ لَبَّيْكَ، إِنَّ الْحَمْدَ وَالنِّعْمَةَ لَكَ وَالْمُلْكَ، لَا شَرِيكَ لَكَ\" من الإحرام حتى بداية الطواف." },
+  { title: "طواف العمرة (٧ أشواط)", detail: "البدء من الحجر الأسود (الإشارة إليه أو تقبيله إن أمكن بلا زحام) وجعل الكعبة عن اليسار، ٧ أشواط كاملة. يُستحب للرجال الرَّمَل (إسراع الخطى) في الأشواط الثلاثة الأولى. الدعاء المأثور بين الركن اليماني والحجر الأسود: \"رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ\"." },
+  { title: "ركعتا الطواف خلف مقام إبراهيم", detail: "إن تيسّر، وإلا ففي أي مكان من المسجد الحرام." },
+  { title: "الشرب من ماء زمزم", detail: "والدعاء بما شئتِ، فماء زمزم لما شُرب له." },
+  { title: "السعي بين الصفا والمروة (٧ أشواط)", detail: "البدء من الصفا بقول: \"إِنَّ الصَّفَا وَالْمَرْوَةَ مِنْ شَعَائِرِ اللَّهِ\"، ثم السعي إلى المروة (شوط)، والعودة (شوط)، وهكذا حتى تكتمل ٧ أشواط تنتهي بالمروة. يُستحب للرجال الهرولة بين العلامتين الخضراوين." },
+  { title: "الحلق أو التقصير", detail: "الرجل: حلق كامل الرأس (أفضل) أو تقصيره. المرأة: تقصير قدر أنملة (طرف إصبع) من أطراف شعرها فقط. وبهذا تنتهي العمرة ويحلّ كل ما حرُم بالإحرام." },
+];
+const HAJJ_DAYS = [
+  { day: "٨ ذو الحجة (يوم التروية)", detail: "الإحرام بالحج من مكانك في مكة، ثم التوجّه إلى مِنى والمبيت بها، وأداء الصلوات الخمس فيها قصرًا (بلا جمع)." },
+  { day: "٩ ذو الحجة (يوم عرفة)", detail: "التوجّه إلى عرفة بعد شروق الشمس والبقاء فيها (الوقوف) حتى غروبها — وهذا رُكن الحج الأعظم: \"الحج عرفة\". تُجمع الظهر والعصر جمع تقديم قصرًا. أفضل الدعاء يوم عرفة: \"لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ\". بعد الغروب، التوجّه إلى مزدلفة وجمع المغرب والعشاء بها والمبيت، وجمع الحصى للرمي." },
+  { day: "١٠ ذو الحجة (يوم النحر/العيد)", detail: "التوجّه إلى مِنى ورمي جمرة العقبة (الكبرى) بـ٧ حصيات مع التكبير عند كل حصاة، ثم ذبح الهدي، ثم الحلق أو التقصير (يحلّ بعده التحلّل الأصغر)، ثم طواف الإفاضة والسعي (لمن كان متمتعًا)، ثم العودة إلى مِنى." },
+  { day: "١١-١٢ ذو الحجة (أيام التشريق)", detail: "المبيت في مِنى، ورمي الجمرات الثلاث (الصغرى ثم الوسطى ثم الكبرى) كل يوم بعد الزوال، ٧ حصيات لكل جمرة، مع الدعاء بعد الصغرى والوسطى (لا بعد الكبرى)." },
+  { day: "قبل المغادرة", detail: "طواف الوداع (واجب على غير المكية، ومعذورة الحائض والنفساء)." },
+];
+const KAABA_DUA_SPOTS = [
+  { name: "الملتزم", desc: "ما بين الحجر الأسود وباب الكعبة — من أفضل مواضع الدعاء." },
+  { name: "الحِجْر (حِجْر إسماعيل)", desc: "من دخله فهو كمن دخل الكعبة نفسها عند كثير من العلماء." },
+  { name: "خلف مقام إبراهيم", desc: "مكان صلاة ركعتي الطواف." },
+  { name: "عند الصفا والمروة", desc: "خصوصًا عند استقبال القبلة أعلى الصفا." },
+  { name: "أثناء الطواف عمومًا", desc: "خصوصًا بين الركن اليماني والحجر الأسود." },
+  { name: "عرفة", desc: "يوم عرفة تحديدًا — خير الدعاء دعاء يوم عرفة." },
+  { name: "عند شرب ماء زمزم", desc: "ماء زمزم لما شُرب له." },
+];
+const IHRAM_TIPS = [
+  "الرجل: قطعتان بيضاوان بلا خياطة (إزار ورداء)، بلا تغطية للرأس، ونعل لا يغطي الكعبين إن أمكن (يجوز الحذاء العادي عند الحاجة).",
+  "المرأة: ملابسها المعتادة الساترة الفضفاضة، بدون نقاب أو قفازين أثناء الإحرام (يجوز تغطية الوجه بسدل من غير ملامسة إن وُجد أجانب).",
+  "ممنوعات الإحرام: الطيب بعد النية، قص الشعر أو الأظافر، الصيد، عقد النكاح، الجماع ومقدماته، تغطية الرأس للرجل، لبس المخيط للرجل.",
+  "تجهيزات عملية: نعل مريح، فازلين لمنع الاحتكاك، واقي شمس، حزام خصر لحفظ الهاتف والمال، مظلة صغيرة للحر، شرب ماء بكثرة، أحذية إضافية.",
+  "احرصي على تعلّم أدعية الطواف والسعي مسبقًا أو حمّليها معكِ، وحافظي على الطمأنينة وعدم التدافع مع الزحام.",
+];
+
+function HajjUmrahScreen({ onBack }) {
+  const [tab, setTab] = useState("umrah"); // umrah | hajj | duas | tips
+  return (
+    <div>
+      <TopBarBack onBack={onBack} title="مناسك العمرة والحج" />
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        {[["umrah", "🕋 العمرة"], ["hajj", "📅 أيام الحج"], ["duas", "🤲 أماكن الدعاء"], ["tips", "🎒 نصائح وتجهيز"]].map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            style={{
+              padding: "8px 14px", borderRadius: 999, cursor: "pointer",
+              border: `1px solid ${tab === id ? "transparent" : "var(--border)"}`,
+              background: tab === id ? "var(--primary)" : "var(--surface)",
+              color: tab === id ? "var(--onPrimary)" : "var(--textDim)",
+              fontFamily: "'Cairo', sans-serif", fontSize: 12.5, fontWeight: 600,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "umrah" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {UMRAH_STEPS.map((s, i) => (
+            <Card key={i} style={{ padding: 16, display: "flex", gap: 12 }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--primary)", color: "var(--onPrimary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, fontWeight: 700 }}>{i + 1}</div>
+              <div>
+                <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{s.title}</div>
+                <p style={{ fontSize: 13, color: "var(--textDim)", lineHeight: 1.8, margin: 0 }}>{s.detail}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "hajj" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {HAJJ_DAYS.map((d, i) => (
+            <Card key={i} style={{ padding: 16 }}>
+              <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 13.5, fontWeight: 700, color: "var(--accent)", marginBottom: 6 }}>{d.day}</div>
+              <p style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.8, margin: 0 }}>{d.detail}</p>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "duas" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ fontSize: 12, color: "var(--textDim)", lineHeight: 1.7, margin: "0 0 4px" }}>مواضع يُستحب فيها الإكثار من الدعاء حول الكعبة وفي مناسك الحج:</p>
+          {KAABA_DUA_SPOTS.map((s, i) => (
+            <Card key={i} style={{ padding: 14, display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 18 }}>🤲</span>
+              <div>
+                <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>{s.name}</div>
+                <p style={{ fontSize: 12.5, color: "var(--textDim)", margin: "2px 0 0", lineHeight: 1.7 }}>{s.desc}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "tips" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {IHRAM_TIPS.map((t, i) => (
+            <Card key={i} style={{ padding: 14, display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>👝</span>
+              <p style={{ fontSize: 13, color: "var(--text)", margin: 0, lineHeight: 1.8 }}>{t}</p>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LearnSection({ day, updateDay, goTo }) {
+  const [seerahOpen, setSeerahOpen] = useState(false);
+  const [pillarsOpen, setPillarsOpen] = useState(false);
+  const [hajjOpen, setHajjOpen] = useState(false);
+  if (seerahOpen) return <SeerahScreen onBack={() => setSeerahOpen(false)} />;
+  if (pillarsOpen) return <PrayerPillarsScreen onBack={() => setPillarsOpen(false)} />;
+  if (hajjOpen) return <HajjUmrahScreen onBack={() => setHajjOpen(false)} />;
+  return (
+    <div>
+      <SectionTitle right={<button onClick={() => goTo?.("ai")} style={{ ...btnGhost(), fontSize: 11.5 }}><Sparkles size={14} /> اسأل أنيسك AI</button>}>🌿 فَذَكِّرْ إِنْ نَفَعَتِ الذِّكْرَى</SectionTitle>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+        <button onClick={() => goTo?.("hadith")} style={{ border: "1px solid var(--border)", background: "var(--surface)", borderRadius: 13, padding: "10px 8px", cursor: "pointer", color: "var(--text)", fontFamily: "'Cairo', sans-serif", fontSize: 11.5, fontWeight: 700 }}>📚 الأحاديث</button>
+        <button onClick={() => goTo?.("ai")} style={{ border: "1px solid var(--border)", background: "var(--surface)", borderRadius: 13, padding: "10px 8px", cursor: "pointer", color: "var(--text)", fontFamily: "'Cairo', sans-serif", fontSize: 11.5, fontWeight: 700 }}>🤖 اسأل أنيسك AI</button>
+      </div>
 
       <Card onClick={() => setSeerahOpen(true)} style={{ padding: 18, marginBottom: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 14, background: "linear-gradient(135deg, var(--accentSoft), transparent)" }}>
         <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -5302,6 +7290,28 @@ function LearnSection({ day, updateDay }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Reem Kufi', sans-serif", fontSize: 16, color: "var(--text)" }}>السيرة النبوية</div>
           <div style={{ fontSize: 12.5, color: "var(--textDim)" }}>محطات من حياة النبي ﷺ على خط زمني</div>
+        </div>
+        <ChevronLeft size={18} color="var(--textDim)" />
+      </Card>
+
+      <Card onClick={() => setPillarsOpen(true)} style={{ padding: 18, marginBottom: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 14, background: "linear-gradient(135deg, var(--accentSoft), transparent)" }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <span style={{ fontSize: 20 }}>🕌</span>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: "'Reem Kufi', sans-serif", fontSize: 16, color: "var(--text)" }}>أركان الصلاة</div>
+          <div style={{ fontSize: 12.5, color: "var(--textDim)" }}>الـ١٤ ركنًا بالتفصيل: موضع كل ركن ووقته وفضله</div>
+        </div>
+        <ChevronLeft size={18} color="var(--textDim)" />
+      </Card>
+
+      <Card onClick={() => setHajjOpen(true)} style={{ padding: 18, marginBottom: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 14, background: "linear-gradient(135deg, var(--accentSoft), transparent)" }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <span style={{ fontSize: 20 }}>🕋</span>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: "'Reem Kufi', sans-serif", fontSize: 16, color: "var(--text)" }}>مناسك العمرة والحج</div>
+          <div style={{ fontSize: 12.5, color: "var(--textDim)" }}>خطوة بخطوة، مع الأدعية وأماكن استجابة الدعاء ونصائح التجهيز</div>
         </div>
         <ChevronLeft size={18} color="var(--textDim)" />
       </Card>
@@ -5656,6 +7666,7 @@ function MonthlyTracker({ state, updateState }) {
 
 function Journey({ state, updateState }) {
   const week = last7Days(state.days);
+  const [sharingAchievement, setSharingAchievement] = useState(null); // "week" | "month" | null
   const [goalTitle, setGoalTitle] = useState("");
   const addGoal = () => {
     if (!goalTitle.trim()) return;
@@ -5666,6 +7677,37 @@ function Journey({ state, updateState }) {
     const goals = [...state.goals];
     goals[i].done = !goals[i].done;
     updateState({ goals });
+  };
+
+  const shareAchievement = async (period) => {
+    setSharingAchievement(period);
+    try {
+      const now = new Date();
+      let keys, label;
+      if (period === "week") {
+        keys = week.map((d) => d.key);
+        label = "هذا الأسبوع";
+      } else {
+        keys = [];
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        for (let day = 1; day <= daysInMonth; day++) keys.push(todayKey(new Date(now.getFullYear(), now.getMonth(), day)));
+        label = now.toLocaleDateString("ar-EG", { month: "long" });
+      }
+      const stats = computePeriodStats(state.days, keys);
+      const T = getTokens("light", "classic");
+      const blob = await generateAchievementCard(stats, label, state.prefs?.name, { hero1: T.primary, hero2: T.accent });
+      const file = new File([blob], "anisk-achievement.png", { type: "image/png" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "إنجازي مع أنيسك" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "anisk-achievement.png";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch { /* تجاهل فشل المشاركة */ }
+    setSharingAchievement(null);
   };
 
   return (
@@ -5683,6 +7725,15 @@ function Journey({ state, updateState }) {
           </div>
         </Card>
       )}
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => shareAchievement("week")} disabled={sharingAchievement === "week"} style={{ ...btnPrimarySmall(), flex: 1, justifyContent: "center", opacity: sharingAchievement === "week" ? 0.6 : 1 }}>
+          📤 مشاركة إنجاز الأسبوع
+        </button>
+        <button onClick={() => shareAchievement("month")} disabled={sharingAchievement === "month"} style={{ ...btnGhost(), flex: 1, justifyContent: "center", opacity: sharingAchievement === "month" ? 0.6 : 1 }}>
+          📤 مشاركة إنجاز الشهر
+        </button>
+      </div>
 
       <SectionTitle>المتتبّع الشهري</SectionTitle>
       <Card style={{ padding: 16 }}>
@@ -5994,7 +8045,7 @@ function AnisqAI() {
   );
 }
 
-function SettingsSection({ state, updateState, prefs, updatePrefs, themeMode, setThemeMode, reminders, tr }) {
+function SettingsSection({ state, updateState, prefs, updatePrefs, themeMode, setThemeMode, resolvedTheme, reminders, tr }) {
   return (
     <div>
       <SectionTitle>{tr("settings")}</SectionTitle>
@@ -6021,23 +8072,49 @@ function SettingsSection({ state, updateState, prefs, updatePrefs, themeMode, se
         ))}
       </Card>
 
-      <div style={{ ...rowLabel(), margin: "0 4px 8px" }}>{tr("lightColor")}</div>
-      <Card style={{ padding: 12, marginBottom: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {Object.entries(LIGHT_PRESETS).map(([id, p]) => (
-          <button key={id} onClick={() => updateState(gregorianToHijri(new Date()).month === 9 ? { lightTheme: id, disableRamadanTheme: true } : { lightTheme: id })} style={{
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 6, border: "none", background: "transparent", cursor: "pointer", flex: 1, minWidth: 64,
-          }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: "50%", display: "flex", overflow: "hidden",
-              border: state.lightTheme === id ? "2.5px solid var(--accent)" : "1px solid var(--border)",
-            }}>
-              <div style={{ width: "50%", background: p.swatch[0] }} />
-              <div style={{ width: "50%", background: p.swatch[1] }} />
-            </div>
-            <span style={{ fontSize: 11, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>{p.label}</span>
-          </button>
-        ))}
-      </Card>
+      {resolvedTheme !== "dark" && (
+        <>
+          <div style={{ ...rowLabel(), margin: "0 4px 8px" }}>{tr("lightColor")}</div>
+          <Card style={{ padding: 12, marginBottom: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {Object.entries(LIGHT_PRESETS).map(([id, p]) => (
+              <button key={id} onClick={() => updateState(gregorianToHijri(new Date()).month === 9 ? { lightTheme: id, disableRamadanTheme: true } : { lightTheme: id })} style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 6, border: "none", background: "transparent", cursor: "pointer", flex: 1, minWidth: 64,
+              }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: "50%", display: "flex", overflow: "hidden",
+                  border: state.lightTheme === id ? "2.5px solid var(--accent)" : "1px solid var(--border)",
+                }}>
+                  <div style={{ width: "50%", background: p.swatch[0] }} />
+                  <div style={{ width: "50%", background: p.swatch[1] }} />
+                </div>
+                <span style={{ fontSize: 11, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>{p.label}</span>
+              </button>
+            ))}
+          </Card>
+        </>
+      )}
+
+      {resolvedTheme === "dark" && (
+        <>
+          <div style={{ ...rowLabel(), margin: "0 4px 8px" }}>لون الوضع الليلي</div>
+          <Card style={{ padding: 12, marginBottom: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {Object.entries(DARK_PRESETS).map(([id, p]) => (
+              <button key={id} onClick={() => updateState({ darkTheme: id })} style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 6, border: "none", background: "transparent", cursor: "pointer", flex: 1, minWidth: 64,
+              }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: "50%", display: "flex", overflow: "hidden",
+                  border: (state.darkTheme || "classic") === id ? "2.5px solid var(--accent)" : "1px solid var(--border)",
+                }}>
+                  <div style={{ width: "50%", background: p.swatch[0] }} />
+                  <div style={{ width: "50%", background: p.swatch[1] }} />
+                </div>
+                <span style={{ fontSize: 11, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>{p.label}</span>
+              </button>
+            ))}
+          </Card>
+        </>
+      )}
 
       <div style={rowLabel()}>القرآن</div>
       <Card style={{ marginBottom: 20 }}>
@@ -6078,6 +8155,7 @@ function SettingsSection({ state, updateState, prefs, updatePrefs, themeMode, se
         <ToggleRow label="🌙 تذكير قيام الليل" checked={prefs.notifQiyam} onChange={(v) => updatePrefs({ notifQiyam: v })} />
         <ToggleRow label="☀️ تذكير صلاة الضحى" checked={prefs.notifDuha} onChange={(v) => updatePrefs({ notifDuha: v })} />
         <ToggleRow label="🌙 تنبيه صيام السنة قبلها بيوم" checked={prefs.notifFastingEve} onChange={(v) => updatePrefs({ notifFastingEve: v })} />
+        <ToggleRow label="📜 حديث اليوم" checked={prefs.notifHadith !== false} onChange={(v) => updatePrefs({ notifHadith: v })} />
         <ToggleRow
           label="⏰ منبّه الفجر المتكرر (لحد ما تأكدي إنك قمتِ)"
           checked={prefs.fajrAlarmEnabled}
@@ -6126,6 +8204,9 @@ function SettingsSection({ state, updateState, prefs, updatePrefs, themeMode, se
           حددي لكل تذكير المدة التي تريدينها بشكل مستقل. الخيارات تبدأ من دقيقة واحدة، ويمكنك كتابة أي عدد دقائق مخصص.
         </div>
         <ReminderSetting label="الصلاة على النبي ﷺ" enabled={prefs.salawatEnabled} interval={prefs.salawatIntervalMin} onEnabled={(v) => updatePrefs({ salawatEnabled: v })} onInterval={(v) => updatePrefs({ salawatIntervalMin: v })} />
+        {prefs.salawatEnabled && (
+          <p style={{ fontSize: 10.5, color: "var(--textDim)", lineHeight: 1.6, margin: "0 0 10px" }}>من مغرب الخميس لمغرب الجمعة، التذكير بيتكرر كل ١٥ دقيقة تلقائيًا مهما كان الفاصل اللي اخترتيه — تكريمًا لفضل الصلاة على النبي ﷺ يوم الجمعة.</p>
+        )}
         <ReminderSetting label="الاستغفار" enabled={prefs.istighfarEnabled} interval={prefs.istighfarIntervalMin} onEnabled={(v) => updatePrefs({ istighfarEnabled: v })} onInterval={(v) => updatePrefs({ istighfarIntervalMin: v })} />
         <ReminderSetting label="🌿 آية حكمة/موعظة/ترغيب/ترهيب" enabled={prefs.wisdomVerseEnabled} interval={prefs.wisdomIntervalMin} onEnabled={(v) => updatePrefs({ wisdomVerseEnabled: v })} onInterval={(v) => updatePrefs({ wisdomIntervalMin: v })} />
         <ToggleRow label="🌙 تذكير بصيام الاثنين والخميس والأيام البيض" checked={prefs.fastingReminderEnabled} onChange={(v) => updatePrefs({ fastingReminderEnabled: v })} last />
@@ -6322,7 +8403,7 @@ const STRINGS = {
   ar: {
     appName: "أنيسك",
     home: "الرئيسية", quran: "القرآن", listen: "استماع", prayerTimes: "الصلاة", ibadah: "عبادتي", adhkar: "الأذكار",
-    learn: "تعلّم", journey: "رحلتي", settings: "الإعدادات", ai: "اسأل أنيسك AI",
+    learn: "تعلّم", journey: "رحلتي", settings: "الإعدادات", ai: "اسأل أنيسك AI", hadith: "الأحاديث",
     appearance: "المظهر", light: "فاتح", dark: "داكن", system: "حسب النظام",
     language: "اللغة", arabic: "العربية", english: "English",
     lightColor: "لون الوضع الفاتح",
@@ -6333,7 +8414,7 @@ const STRINGS = {
   en: {
     appName: "Anisk",
     home: "Home", quran: "Quran", listen: "Listen", prayerTimes: "Prayer", ibadah: "Worship", adhkar: "Dhikr",
-    learn: "Learn", journey: "Journey", settings: "Settings", ai: "Ask Anisk AI",
+    learn: "Learn", journey: "Journey", settings: "Settings", ai: "Ask Anisk AI", hadith: "Hadith",
     appearance: "Appearance", light: "Light", dark: "Dark", system: "System",
     language: "Language", arabic: "العربية", english: "English",
     lightColor: "Light theme color",
@@ -6348,38 +8429,49 @@ function useTr(lang) {
 }
 
 const NAV_ITEMS = [
-  { id: "home", labelKey: "home", icon: HomeIcon },
-  { id: "quran", labelKey: "quran", icon: BookOpen },
-  { id: "listen", labelKey: "listen", icon: Music },
-  { id: "prayerTimes", labelKey: "prayerTimes", icon: Clock },
-  { id: "ibadah", labelKey: "ibadah", icon: Compass },
-  { id: "adhkar", labelKey: "adhkar", icon: Star },
-  { id: "learn", labelKey: "learn", icon: GraduationCap },
+  { id: "quran", labelKey: "quran", icon: BookOpen, views: ["quran", "listen"] },
+  { id: "prayerTimes", labelKey: "prayerTimes", icon: Clock, views: ["prayerTimes"] },
+  { id: "ibadah", labelKey: "ibadah", icon: Compass, views: ["ibadah", "adhkar"] },
+  { id: "learn", labelKey: "learn", icon: GraduationCap, views: ["learn", "hadith", "ai"] },
+  { id: "journey", labelKey: "journey", icon: Target, views: ["journey"] },
+  { id: "settings", labelKey: "settings", icon: SettingsIcon, views: ["settings"] },
 ];
 const SIDEBAR_EXTRA = [
+  { id: "home", labelKey: "home", icon: HomeIcon },
+  { id: "listen", labelKey: "listen", icon: Music },
+  { id: "adhkar", labelKey: "adhkar", icon: Star },
   { id: "ai", labelKey: "ai", icon: Sparkles },
-  { id: "journey", labelKey: "journey", icon: Target },
-  { id: "settings", labelKey: "settings", icon: SettingsIcon },
+  { id: "hadith", labelKey: "hadith", icon: BookMarked },
 ];
 
 function BottomNav({ view, setView, tr }) {
+  const activeGroup = NAV_ITEMS.find((item) => item.views.includes(view))?.id;
   return (
-    <div style={{ position: "fixed", bottom: 0, insetInlineStart: 0, insetInlineEnd: 0, zIndex: 50, maxWidth: 480, margin: "0 auto" }}>
+    <div style={{
+      position: "fixed", bottom: 0, insetInlineStart: 0, insetInlineEnd: 0, zIndex: 50, maxWidth: 480, margin: "0 auto",
+      padding: "0 8px calc(4px + env(safe-area-inset-bottom))",
+      background: "var(--surface)", borderTop: "1px solid var(--border)", boxSizing: "border-box",
+    }}>
       <div style={{
-        display: "flex", background: "var(--surface)", borderTop: "1px solid var(--border)",
-        padding: "10px 4px calc(10px + env(safe-area-inset-bottom))", boxShadow: "0 -6px 20px rgba(0,0,0,0.04)",
+        display: "flex", alignItems: "stretch", background: "var(--surface)", border: "1px solid var(--border)",
+        borderBottom: "none", borderRadius: "20px 20px 0 0", padding: "7px 4px 5px",
+        boxShadow: "0 -8px 28px rgba(0,0,0,0.08)", gap: 2,
       }}>
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const active = view === item.id;
+          const active = activeGroup === item.id;
           return (
             <button key={item.id} onClick={() => setView(item.id)} style={{
-              flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "4px 0", minWidth: 0,
-              border: "none", background: "transparent", cursor: "pointer", color: active ? "var(--primary)" : "var(--textDim)",
-              transform: active ? "translateY(-2px)" : "none", transition: "all .2s",
+              flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              gap: 3, padding: "7px 2px 6px", border: "none", borderRadius: 14, cursor: "pointer",
+              background: active ? "var(--accentSoft)" : "transparent",
+              color: active ? "var(--primary)" : "var(--textDim)",
+              transform: active ? "translateY(-1px)" : "none", transition: "all .2s",
             }}>
-              <Icon size={19} strokeWidth={active ? 2.3 : 1.8} />
-              <span style={{ fontSize: 9.5, fontFamily: "'Cairo', sans-serif", fontWeight: active ? 700 : 500, whiteSpace: "nowrap" }}>{tr(item.labelKey)}</span>
+              <span style={{ width: 32, height: 28, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: active ? "var(--surface)" : "transparent", boxShadow: active ? "0 2px 8px rgba(0,0,0,.06)" : "none" }}>
+                <Icon size={19} strokeWidth={active ? 2.35 : 1.8} />
+              </span>
+              <span style={{ fontSize: 9.5, lineHeight: 1.2, fontFamily: "'Cairo', sans-serif", fontWeight: active ? 700 : 500, whiteSpace: "nowrap" }}>{tr(item.labelKey)}</span>
             </button>
           );
         })}
@@ -6918,7 +9010,7 @@ function useReminderEngine(prefs, updatePrefs, appName = "Anisk") {
             const diff = Math.abs(now - time);
             if (diff < 30000 && !firedRef.current.has(key)) {
               firedRef.current.add(key);
-              notify(`حان وقت أذان ${name} 🕌`, `${appName} — رفيقك في طريقك إلى الله`);
+              notify(`حان وقت أذان ${name} 🕌`, PRAYER_VIRTUE[name] || "الله أكبر، حيّ على الصلاة");
               playAdhanSound();
             }
           }
@@ -6928,7 +9020,7 @@ function useReminderEngine(prefs, updatePrefs, appName = "Anisk") {
             const iqamaDiff = Math.abs(now - iqamaTime);
             if (iqamaDiff < 30000 && !firedRef.current.has(iqamaKey)) {
               firedRef.current.add(iqamaKey);
-              notify(`حان وقت إقامة صلاة ${name} 🕌`, `بعد ${iqamaDelay} دقيقة من الأذان — ${appName}`);
+              notify(`حان وقت إقامة صلاة ${name} 🕌`, `بعد ${iqamaDelay} دقيقة من الأذان`);
             }
           }
         });
@@ -6950,13 +9042,15 @@ function useReminderEngine(prefs, updatePrefs, appName = "Anisk") {
           }
         }
 
-        // تذكير الضحى — مرة واحدة يوميًا، بعد الشروق بحوالي ٢٠ دقيقة (بداية وقتها المستحب تقريبًا)
-        if (prefs.notifDuha && t.sunrise) {
-          const duhaTime = new Date(t.sunrise.getTime() + 20 * 60000);
+        // تذكير الضحى — داخل وقتها فقط: بعد الشروق بنحو ٢٠ دقيقة وحتى قبل الظهر بقليل.
+        // لو فتحتِ التطبيق بعد انتهاء وقت الضحى (مثلاً مساءً) لا نرسل إشعارًا متأخرًا.
+        if (prefs.notifDuha && t.sunrise && t.dhuhr) {
+          const duhaStart = new Date(t.sunrise.getTime() + 20 * 60000);
+          const duhaEnd = new Date(t.dhuhr.getTime() - 10 * 60000);
           const duhaKey = `duha-${todayKey()}`;
-          if (now >= duhaTime && !firedRef.current.has(duhaKey)) {
+          if (now >= duhaStart && now < duhaEnd && !firedRef.current.has(duhaKey)) {
             firedRef.current.add(duhaKey);
-            notify("☀️ وقت صلاة الضحى", "من ٢ إلى ٨ ركعات — أجرها عظيم ووقتها لسه مفتوح 🤍", duhaKey);
+            notify("☀️ وقت صلاة الضحى", "من ٢ إلى ٨ ركعات — أجرها عظيم ووقتها مفتوح الآن 🤍", duhaKey);
           }
         }
 
@@ -6971,15 +9065,53 @@ function useReminderEngine(prefs, updatePrefs, appName = "Anisk") {
           }
         }
 
-        // تنبيه صيام السنة قبلها بيوم — لو بكرة يوم صيام مستحب (الاثنين/الخميس،
-        // الأيام البيض، عرفة، عاشوراء)، بننبّه النهاردة (مرة واحدة فقط يوميًا)
-        if (prefs.notifFastingEve) {
-          const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+        // تنبيه صيام السنة: يبدأ بعد مغرب اليوم السابق ويستمر حتى فجر يوم الصيام فقط.
+        // بالتالي لن يظهر تذكير يوم الاثنين مثلًا عصر الاثنين، لأن نافذته انتهت عند الفجر.
+        if (prefs.notifFastingEve && t.maghrib) {
+          const tomorrow = new Date(now);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowTimes = computePrayerTimes(lat, lon, tomorrow, tzOffset, prefs.calcMethod);
           const reasons = fastingRecommendationFor(tomorrow);
           const fastKey = `fasting-eve-${todayKey()}`;
-          if (reasons.length > 0 && !firedRef.current.has(fastKey)) {
+          if (reasons.length > 0 && now >= t.maghrib && tomorrowTimes?.fajr && now < tomorrowTimes.fajr && !firedRef.current.has(fastKey)) {
             firedRef.current.add(fastKey);
             notify("🌙 تذكير: بكرة يوم صيام مستحب", `بكرة ${reasons.join(" و")} — ابدئي نيّتك من الليل 🤍`, fastKey);
+          }
+        }
+
+        // حديث اليوم — إشعار واحد يوميًا (بعد الساعة ٨ صباحًا تقريبًا) بحديث نبوي
+        // مفيد للحياة اليومية، بترتيب ثابت حسب رقم اليوم في السنة (مش عشوائي)
+        if (prefs.notifHadith !== false && now.getHours() >= 8) {
+          const hadithKey = `hadith-${todayKey()}`;
+          if (!firedRef.current.has(hadithKey)) {
+            firedRef.current.add(hadithKey);
+            const h = hadithOfTheDay(now);
+            notify("📜 حديث اليوم", h.text, hadithKey);
+          }
+        }
+
+        // تذكير أذكار الصباح والمساء — كان توجل "تذكير الأذكار" في الإعدادات موجود
+        // من غير أي منطق تنبيه فعلي متوصّل بيه (زرار بلا وظيفة). دلوقتي بيبعت
+        // إشعار مرة يوميًا في وقت كل ذكر، وبيعرض ذكر حقيقي من القائمة نفسها (مش
+        // نص عام) مع دعوة واضحة للفعل.
+        if (prefs.notifAdhkar && t.fajr && t.asr && t.dhuhr) {
+          // أذكار الصباح: من بعد الفجر بقليل وحتى دخول الظهر فقط.
+          const morningTime = new Date(t.fajr.getTime() + 10 * 60000);
+          const morningKey = `adhkar-morning-${todayKey()}`;
+          if (now >= morningTime && now < t.dhuhr && !firedRef.current.has(morningKey)) {
+            firedRef.current.add(morningKey);
+            const dhikr = ADHKAR_CATEGORIES[0].items[0];
+            notify("☀️ أذكار الصباح", `${dhikr.text}\n\nيلا كمّلي الأذكار — اقرأي حصنك اليوم 🤍`, morningKey);
+          }
+          // أذكار المساء: من العصر وحتى نهاية اليوم، وليس في اليوم التالي.
+          const eveningTime = t.asr;
+          const eveningEnd = new Date(now);
+          eveningEnd.setHours(23, 59, 59, 999);
+          const eveningKey = `adhkar-evening-${todayKey()}`;
+          if (now >= eveningTime && now <= eveningEnd && !firedRef.current.has(eveningKey)) {
+            firedRef.current.add(eveningKey);
+            const dhikr = ADHKAR_CATEGORIES[1].items[0];
+            notify("🌙 أذكار المساء", `${dhikr.text}\n\nيلا كمّلي الأذكار — اقرأي حصنك اليوم 🤍`, eveningKey);
           }
         }
       }
@@ -7007,10 +9139,25 @@ function useReminderEngine(prefs, updatePrefs, appName = "Anisk") {
       const salawatMs = Math.max(1, Number(prefs.salawatIntervalMin || prefs.reminderIntervalMin) || 30) * 60000;
       const istighfarMs = Math.max(1, Number(prefs.istighfarIntervalMin || prefs.reminderIntervalMin) || 30) * 60000;
       const wisdomMs = Math.max(1, Number(prefs.wisdomIntervalMin || prefs.reminderIntervalMin) || 30) * 60000;
-      if (prefs.salawatEnabled && now - lastSalawatRef.current >= salawatMs) {
+      // نافذة الصلاة على النبي المستحبة أكثر: من مغرب الخميس لمغرب الجمعة — بنستخدم
+      // مواقيت الصلاة الحقيقية المحسوبة (مش تخمين بالساعة) عشان الدقة، ولو النافذة
+      // دي شغالة بنقلل الفاصل الزمني تلقائيًا (كل ١٥ دقيقة على الأكتر) ونغيّر
+      // الرسالة عشان توضح إنها فرصة يوم الجمعة.
+      const nowDate = new Date(now);
+      const wDay = nowDate.getDay(); // 4=خميس، 5=جمعة
+      let inBlessedWindow = false;
+      if ((wDay === 4 || wDay === 5) && prefs.location?.lat != null && prefs.location?.lon != null) {
+        const tzOff = locTzOffset != null ? locTzOffset : -nowDate.getTimezoneOffset() / 60;
+        const t = computePrayerTimes(prefs.location.lat, prefs.location.lon, nowDate, tzOff, prefs.calcMethod);
+        if (wDay === 4 && t.maghrib && nowDate >= t.maghrib) inBlessedWindow = true;
+        if (wDay === 5 && t.maghrib && nowDate < t.maghrib) inBlessedWindow = true;
+      }
+      const effectiveSalawatMs = inBlessedWindow ? Math.min(salawatMs, 15 * 60000) : salawatMs;
+      if (prefs.salawatEnabled && now - lastSalawatRef.current >= effectiveSalawatMs) {
         lastSalawatRef.current = now;
         const phrase = SALAWAT_PHRASES[Math.floor(Math.random() * SALAWAT_PHRASES.length)];
-        notify("🤍 صلِّ على النبي ﷺ", phrase, `salawat-${now}`);
+        const title = inBlessedWindow ? "🤍 يوم الجمعة — أكثري من الصلاة على النبي ﷺ" : "🤍 صلِّ على النبي ﷺ";
+        notify(title, phrase, `salawat-${now}`);
       }
       if (prefs.istighfarEnabled && now - lastIstighfarRef.current >= istighfarMs) {
         lastIstighfarRef.current = now;
@@ -7033,27 +9180,33 @@ function useReminderEngine(prefs, updatePrefs, appName = "Anisk") {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [prefs.salawatEnabled, prefs.istighfarEnabled, prefs.wisdomVerseEnabled, prefs.salawatIntervalMin, prefs.istighfarIntervalMin, prefs.wisdomIntervalMin, prefs.reminderIntervalMin, notify]);
+  }, [prefs.salawatEnabled, prefs.istighfarEnabled, prefs.wisdomVerseEnabled, prefs.salawatIntervalMin, prefs.istighfarIntervalMin, prefs.wisdomIntervalMin, prefs.reminderIntervalMin, prefs.location?.lat, prefs.location?.lon, prefs.calcMethod, locTzOffset, notify]);
 
-  // تذكير يومي واحد بصيام الاثنين/الخميس والأيام البيض — بيتفحص كل 20 دقيقة، وبيتأكد
-  // إنه اتبعت مرة واحدة بس في اليوم عن طريق حفظ تاريخ آخر تذكير في الذاكرة المؤقتة
-  const fastingReminderFiredRef = useRef(null); // 'YYYY-MM-DD' لآخر يوم اتبعت فيه التذكير
+  // تذكير الصيام: نافذته الوحيدة هي مساء اليوم السابق للصيام وحتى فجر يوم الصيام.
+  const fastingReminderFiredRef = useRef(null);
   useEffect(() => {
     if (!prefs.fastingReminderEnabled) return;
     const tick = () => {
       const now = new Date();
       const key = todayKey(now);
       if (fastingReminderFiredRef.current === key) return;
-      if (now.getHours() < 5) return; // متبعتش التذكير في نص الليل
-      const reasons = fastingRecommendationFor(now);
-      if (reasons.length === 0) return;
+      if (prefs.location?.lat == null || prefs.location?.lon == null) return;
+      const tzOff = locTzOffset != null ? locTzOffset : -now.getTimezoneOffset() / 60;
+      const t = computePrayerTimes(prefs.location.lat, prefs.location.lon, now, tzOff, prefs.calcMethod);
+      if (!t.maghrib) return;
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowTimes = computePrayerTimes(prefs.location.lat, prefs.location.lon, tomorrow, tzOff, prefs.calcMethod);
+      const reasons = fastingRecommendationFor(tomorrow);
+      if (reasons.length === 0 || !tomorrowTimes?.fajr) return;
+      if (now < t.maghrib || now >= tomorrowTimes.fajr) return;
       fastingReminderFiredRef.current = key;
-      notify("🌙 يوم صيام مستحب", `النهارده ${reasons.join(" و")} — فرصة صيام تطوّع، لو قادرة عليه 🤍`);
+      notify("🌙 تذكير: بكرة يوم صيام مستحب", `بكرة ${reasons.join(" و")} — ابدئي نيّتك من الليل 🤍`, `fasting-eve-${key}`);
     };
     tick();
     const id = setInterval(tick, 20 * 60 * 1000);
     return () => clearInterval(id);
-  }, [prefs.fastingReminderEnabled, notify]);
+  }, [prefs.fastingReminderEnabled, prefs.location?.lat, prefs.location?.lon, prefs.calcMethod, locTzOffset, notify]);
 
   return { notifPermission, times, nextPrayer, requestLocation, requestNotifPermission, locTzOffset, travelNotice, dismissTravelNotice };
 }
@@ -7104,7 +9257,7 @@ export default function App() {
   // بنحترم اختيارها ومنغيّرش عليها تلقائيًا.
   const isRamadanNow = gregorianToHijri(new Date()).month === 9;
   const effectiveLightTheme = isRamadanNow && !state.disableRamadanTheme ? "ramadan" : state.lightTheme;
-  const T = getTokens(resolved, effectiveLightTheme);
+  const T = getTokens(resolved, effectiveLightTheme, state.darkTheme);
   const dir = state.lang === "en" ? "ltr" : "rtl";
 
   useEffect(() => {
@@ -7149,15 +9302,16 @@ export default function App() {
   const renderView = () => {
     switch (view) {
       case "home": return <Home state={state} day={day} updateDay={updateDay} prefs={state.prefs} updatePrefs={updatePrefs} goTo={setView} streak={state.streak} welcome={welcome} theme={resolved} reminders={reminders} />;
-      case "quran": return <QuranSection prefs={state.prefs} updatePrefs={updatePrefs} day={day} updateDay={updateDay} nightMode={nightMode} setNightMode={setNightMode} quran={quran} audio={audio} />;
-      case "listen": return <ListenHub quran={quran} prefs={state.prefs} updatePrefs={updatePrefs} />;
+      case "quran": return <QuranSection prefs={state.prefs} updatePrefs={updatePrefs} day={day} updateDay={updateDay} nightMode={nightMode} setNightMode={setNightMode} quran={quran} audio={audio} goTo={setView} />;
+      case "listen": return <ListenHub quran={quran} prefs={state.prefs} updatePrefs={updatePrefs} goTo={setView} />;
       case "prayerTimes": return <PrayerTimesView prefs={state.prefs} updatePrefs={updatePrefs} reminders={reminders} tr={tr} />;
-      case "ibadah": return <Ibadah day={day} updateDay={updateDay} />;
-      case "adhkar": return <AdhkarSection day={day} updateDay={updateDay} prefs={state.prefs} />;
-      case "learn": return <LearnSection day={day} updateDay={updateDay} />;
+      case "ibadah": return <Ibadah day={day} updateDay={updateDay} goTo={setView} />;
+      case "adhkar": return <AdhkarSection day={day} updateDay={updateDay} prefs={state.prefs} goTo={setView} />;
+      case "hadith": return <HadithLibrary onBack={() => setView("home")} />;
+      case "learn": return <LearnSection day={day} updateDay={updateDay} goTo={setView} />;
       case "journey": return <Journey state={state} updateState={updateState} />;
       case "ai": return <AnisqAI />;
-      case "settings": return <SettingsSection state={state} updateState={updateState} prefs={state.prefs} updatePrefs={updatePrefs} themeMode={themeModeState} setThemeMode={setThemeModeState} reminders={reminders} tr={tr} />;
+      case "settings": return <SettingsSection state={state} updateState={updateState} prefs={state.prefs} updatePrefs={updatePrefs} themeMode={themeModeState} setThemeMode={setThemeModeState} resolvedTheme={resolved} reminders={reminders} tr={tr} />;
       default: return null;
     }
   };
@@ -7199,7 +9353,7 @@ export default function App() {
       <div className="unisk-mobile-topbar" style={{
         alignItems: "center", justifyContent: "space-between", padding: "14px 18px 0", maxWidth: 480, margin: "0 auto",
       }}>
-        <span style={{ fontFamily: "'Reem Kufi', sans-serif", fontSize: 18, color: "var(--primary)" }}>{tr("appName")}</span>
+        <button onClick={() => setView("home")} style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "'Reem Kufi', sans-serif", fontSize: 18, color: "var(--primary)" }}>{tr("appName")}</button>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setView("journey")} style={iconBtn()}><Target size={17} color={view === "journey" ? "var(--primary)" : "var(--textDim)"} /></button>
           <button onClick={() => setView("settings")} style={iconBtn()}><SettingsIcon size={17} color={view === "settings" ? "var(--primary)" : "var(--textDim)"} /></button>
@@ -7211,7 +9365,7 @@ export default function App() {
           <Sidebar view={view} setView={setView} tr={tr} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ maxWidth: 480, margin: "0 auto", padding: "22px 18px 100px" }}>
+          <div style={{ maxWidth: 480, margin: "0 auto", padding: "22px 18px 132px" }}>
             <div key={view} className="anisk-view-enter">
               {renderView()}
             </div>
