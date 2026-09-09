@@ -4612,17 +4612,14 @@ function ListenHub({ quran, prefs, updatePrefs, goTo }) {
     if (el) el.referrerPolicy = "no-referrer";
   }, []);
 
-    // إذاعة القرآن الكريم من القاهرة (٩٣.١ FM) هي الأولوية دايمًا — نفس البث المُستخدم
-  // فعليًا وعلنًا في مواقع إذاعة قرآنية معروفة تانية (زي e-quran.com)، يعني مش رابط
-  // خاص أو مقيّد بدومين معيّن. لو تعطّل لأي سبب، بيتحول تلقائيًا لإذاعة القرآن
-  // الكريم السعودية كاحتياطي (مصدرها الرسمي عبر mp3quran.net).
-  // اتضح إن stream.radiojar.com بيرفض يشتغل تحديدًا من دومينات الاستضافة المجانية
-  // العامة زي *.vercel.app (فشل فعليًا مرتين مع هذا التطبيق، رغم إنه شغال على
-  // مواقع بدومين خاص زي holyquranradio.com) — على الأغلب إجراء مضاد لسوء
-  // الاستخدام من مزوّد البث نفسه. الحل: استخدام مصدر مصمَّم أصلًا لتضمين تطبيقات
-  // خارجية بأي دومين (qurango.net)، بدل مصدر عام بيقيّد حسب الدومين.
-  const RADIO_PRIMARY = "https://stream.radiojar.com/8s5u5tpdtwzuv";
-  const RADIO_FALLBACK = "https://backup.qurango.net/radio/mix";
+  // قائمة روابط البث — التطبيق بيجرّبهم واحد بعد واحد تلقائياً لحد ما رابط يشتغل
+  // الترتيب: من الأكثر استقراراً للأقل، كلهم من مصادر عامة مش مقيّدة بدومين
+  const RADIO_URLS = [
+    "https://backup.qurango.net/radio/cairo",       // إذاعة القاهرة - qurango (الأولوية)
+    "https://backup.qurango.net/radio/mix",          // إذاعة متنوعة - qurango (احتياطي ١)
+    "https://stream.radiojar.com/8s5u5tpdtwzuv",    // إذاعة القاهرة - radiojar (احتياطي ٢)
+    "https://n10.radiojar.com/8s5u5tpdtwzuv",       // إذاعة القاهرة - radiojar node (احتياطي ٣)
+  ];
 
   const toggleRadio = (forceSource) => {
     if (radioPlaying && !forceSource) { radioRef.current.pause(); setRadioPlaying(false); setRadioStatus("idle"); ANISK_LISTEN_SESSION.radioPlaying = false; ANISK_LISTEN_SESSION.radioStatus = "idle"; return; }
@@ -4634,50 +4631,33 @@ function ListenHub({ quran, prefs, updatePrefs, goTo }) {
     ANISK_LISTEN_SESSION.radioPlaying = false;
 
     const el = radioRef.current;
-    let settled = false;
-    let timer = null;
-
-    // بعض محطات البث المقيّدة بترفض بصمت من غير ما تطلع onerror واضح ولا ترفض
-    // وعد .play() — الطلب بيفضل معلّق من غير أي استجابة حقيقية، فيبان للمستخدمة
-    // إن "شغال" بينما مفيش صوت أصلًا. الحل: نعتمد على حدث "playing" الحقيقي (بيدل
-    // على إن صوت فعليًا بدأ يتشغّل) كدليل نجاح، مش مجرد إن .play() اتنفّذ، ومعاه
-    // مهلة قصوى لو الصوت ما بدأش فعليًا خلال ٦ ثواني.
-    const tryUrl = (url, isFallback) => {
+    // نجرّب الروابط واحد بعد واحد — لو رابط فشل أو ما بدأش في ٦ ثواني ننتقل للتالي
+    const tryNext = (index) => {
+      if (index >= RADIO_URLS.length) {
+        setRadioStatus("error"); setRadioPlaying(false);
+        ANISK_LISTEN_SESSION.radioStatus = "error"; ANISK_LISTEN_SESSION.radioPlaying = false;
+        return;
+      }
+      const url = RADIO_URLS[index];
+      const isFallback = index > 0;
       setRadioSource(isFallback ? "fallback" : "primary");
       ANISK_LISTEN_SESSION.radioSource = isFallback ? "fallback" : "primary";
+      let settled = false;
+      let timer = null;
       el.onerror = null;
+      const cleanup = () => { clearTimeout(timer); el.removeEventListener("playing", onPlaying); };
       const onPlaying = () => {
         if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        el.removeEventListener("playing", onPlaying);
-        setRadioPlaying(true);
-        setRadioStatus("idle");
-        ANISK_LISTEN_SESSION.radioPlaying = true;
-        ANISK_LISTEN_SESSION.radioStatus = "playing";
+        settled = true; cleanup();
+        setRadioPlaying(true); setRadioStatus("idle");
+        ANISK_LISTEN_SESSION.radioPlaying = true; ANISK_LISTEN_SESSION.radioStatus = "playing";
       };
       el.addEventListener("playing", onPlaying);
       el.src = url;
-      el.play().catch(() => {
-        if (settled) return;
-        clearTimeout(timer);
-        el.removeEventListener("playing", onPlaying);
-        if (!isFallback && !forceSource) { settled = false; tryUrl(RADIO_FALLBACK, true); }
-        else { settled = true; setRadioStatus("error"); setRadioPlaying(false); ANISK_LISTEN_SESSION.radioStatus = "error"; ANISK_LISTEN_SESSION.radioPlaying = false; }
-      });
-      if (!isFallback && !forceSource) {
-        timer = setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          el.removeEventListener("playing", onPlaying);
-          el.pause();
-          settled = false;
-          tryUrl(RADIO_FALLBACK, true);
-        }, 6000);
-      }
+      el.play().catch(() => { if (settled) return; settled = true; cleanup(); tryNext(index + 1); });
+      timer = setTimeout(() => { if (settled) return; settled = true; cleanup(); el.pause(); tryNext(index + 1); }, 6000);
     };
-    if (forceSource === "fallback") tryUrl(RADIO_FALLBACK, true);
-    else tryUrl(RADIO_PRIMARY, false);
+    tryNext(0);
   };
 
   useEffect(() => {
