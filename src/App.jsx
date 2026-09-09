@@ -957,20 +957,20 @@ const TAJWEED_COLORS = {
   ghunnah: "#FF7E1E",
 };
 const TAJWEED_LEGEND = [
-  { color: "#AAAAAA", label: "همزة الوصل / حرف ساكن / لام شمسية" },
-  { color: "#537FFF", label: "مدّ عادي (حركتان)" },
-  { color: "#4050FF", label: "مدّ جائز (٢/٤/٦ حركات)" },
-  { color: "#000EBC", label: "مدّ لازم (٦ حركات)" },
-  { color: "#2144C1", label: "مدّ متصل (٤-٥ حركات)" },
-  { color: "#DD0008", label: "قلقلة" },
-  { color: "#D500B7", label: "إخفاء شفوي" },
-  { color: "#9400A8", label: "إخفاء" },
-  { color: "#58B800", label: "إدغام شفوي" },
-  { color: "#26BFFD", label: "إقلاب" },
-  { color: "#169777", label: "إدغام بغنة" },
-  { color: "#169200", label: "إدغام بلا غنة" },
-  { color: "#A1A1A1", label: "إدغام متجانسين / متقاربين" },
-  { color: "#FF7E1E", label: "غنة" },
+  { color: "#AAAAAA", short: "همزة وصل/سكون", label: "همزة الوصل / حرف ساكن / لام شمسية" },
+  { color: "#537FFF", short: "مدّ عادي", label: "مدّ عادي (حركتان)" },
+  { color: "#4050FF", short: "مدّ جائز", label: "مدّ جائز (٢/٤/٦ حركات)" },
+  { color: "#000EBC", short: "مدّ لازم", label: "مدّ لازم (٦ حركات)" },
+  { color: "#2144C1", short: "مدّ متصل", label: "مدّ متصل (٤-٥ حركات)" },
+  { color: "#DD0008", short: "قلقلة", label: "قلقلة" },
+  { color: "#D500B7", short: "إخفاء شفوي", label: "إخفاء شفوي" },
+  { color: "#9400A8", short: "إخفاء", label: "إخفاء" },
+  { color: "#58B800", short: "إدغام شفوي", label: "إدغام شفوي" },
+  { color: "#26BFFD", short: "إقلاب", label: "إقلاب" },
+  { color: "#169777", short: "إدغام بغنة", label: "إدغام بغنة" },
+  { color: "#169200", short: "إدغام بلا غنة", label: "إدغام بلا غنة" },
+  { color: "#A1A1A1", short: "إدغام متجانسين", label: "إدغام متجانسين / متقاربين" },
+  { color: "#FF7E1E", short: "غنة", label: "غنة" },
 ];
 
 // جلب بيانات أحكام التجويد (مرة واحدة لكل الجلسة، من الملف الرسمي الوحيد المتاح
@@ -1364,6 +1364,18 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
   const REF_FONT_SIZE = 60; // حجم مرجعي نقيس بيه العرض الطبيعي لكل سطر
   const LINE_UNIT = 60; // ارتفاع تقريبي لكل سطر عادي (بوحدات تصميم الصفحة الثابت 600px)
   const [pageHeight, setPageHeight] = useState(700);
+  const innerRef = useRef(null);
+
+  // الارتفاع المحسوب فوق (من عدد أسطر المصحف الأصلية) كان مجرد تخمين أولي مناسب
+  // للعرض العادي بخط QCF فقط. في وضع التجويد النص بيتجمع في فقرة متصلة أقصر،
+  // فالتخمين ده بيبقى أكبر من المحتوى الفعلي ويسيب فراغ فاضي كبير تحت النص. الحل:
+  // نقيس الارتفاع الحقيقي للمحتوى المرسوم فعليًا بعد كل تغيير، ونظبط ارتفاع
+  // الإطار عليه مباشرة (التحويل transform بصريًا بس، مش بيأثر على القياس الفعلي).
+  useLayoutEffect(() => {
+    if (!innerRef.current) return;
+    const measured = innerRef.current.offsetHeight;
+    if (measured && Math.abs(measured - pageHeight) > 4) setPageHeight(measured);
+  }, [pageData, tajweedEnabled, fitFontSize, hiddenAyahs]); // eslint-disable-line
 
   useLayoutEffect(() => {
     const viewer = viewerRef.current;
@@ -1476,18 +1488,39 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
 
   return (
     <div ref={viewerRef} dir="rtl" style={{ position: "relative", width: "100%", height: pageHeight * pageScale, overflow: "hidden" }}>
-      <div style={{
+      <div ref={innerRef} style={{
         position: "absolute", top: 0, left: "50%", display: "flex", flexDirection: "column", justifyContent: "center", gap: 6,
-        width: PAGE_WIDTH, minHeight: pageHeight, padding: "8px 0", boxSizing: "border-box",
+        width: PAGE_WIDTH, padding: "8px 0", boxSizing: "border-box",
         transform: `translateX(-50%) scale(${pageScale})`, transformOrigin: "top center",
       }}>
-      {pageData.lines.map((line) => {
+      {(() => {
+        // في الوضع العادي (بخط المصحف QCF) كل سطر من بيانات الصفحة الرسمية لازم
+        // يفضل سطر مستقل زي المطبوع بالظبط. لكن في وضع التجويد (خط أميري عادي) مفيش
+        // داعي نحافظ على تقسيم الأسطر الأصلي؛ فبنجمع الأسطر العادية المتتالية (ما
+        // بين عناوين السور/البسملة) في فقرة واحدة متدفقة، فيلف النص طبيعي والفاصل
+        // الوحيد بين الكلام يبقى رقم الآية فعلاً، مش قفلة سطر جديدة كل شوية.
+        const groups = [];
+        let current = null;
+        pageData.lines.forEach((line) => {
+          const st = line.words.find((w) => w.type !== "word" && w.type !== "end")?.type;
+          if (!tajweedEnabled || st === "surah_header" || st === "bismillah") {
+            if (current) { groups.push(current); current = null; }
+            groups.push([line]);
+          } else {
+            if (!current) current = [];
+            current.push(line);
+          }
+        });
+        if (current) groups.push(current);
+        return groups;
+      })().map((group, gi) => {
+        const line = group[0];
         const specialType = line.words.find((w) => w.type !== "word" && w.type !== "end")?.type;
 
         // اسم السورة — الصندوق الاحترافي المزخرف (زي المطبوع بالظبط)
         if (specialType === "surah_header") {
           return (
-            <div key={line.line} style={{
+            <div key={gi} style={{
               position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
               margin: "14px auto 10px", padding: "10px 20px", width: "94%",
               border: `2px solid ${nightMode ? "#C9A66B" : "var(--accent)"}`,
@@ -1507,7 +1540,7 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
         // البسملة (لغير الفاتحة) — سطر عادي في النص، بدون صندوق، زي المطبوع بالظبط
         if (specialType === "bismillah") {
           return (
-            <div key={line.line} dir="rtl" style={{
+            <div key={gi} dir="rtl" style={{
               // نستخدم رموز آية البسملة من الفاتحة نفسها، بلا رقم آية، حتى تتطابق
               // مع خط المصحف. وفي الوضع الفاتح يظل لونها أسود كاتم وواضح.
               margin: "5px 0 9px", minHeight: fitFontSize * 1.7, display: "flex", alignItems: "center", justifyContent: "center",
@@ -1521,17 +1554,25 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
           );
         }
 
+        const groupWords = group.flatMap((l) => l.words.map((w, wi) => ({ w, lineNumber: l.line, wi })));
         return (
-          <div key={line.line} dir="rtl" style={{ textAlign: "center", direction: "rtl", unicodeBidi: "bidi-override", overflow: "visible" }}>
-            {line.words.map((w, wi) => {
+          <div key={gi} dir="rtl" style={{ textAlign: tajweedEnabled ? "justify" : "center", direction: "rtl", unicodeBidi: "bidi-override", overflow: "visible" }}>
+            {groupWords.map(({ w, lineNumber, wi }) => {
               const item = findItem(w.verse_key);
               const isMarked = item && markedAyah?.globalNumber === item.globalNumber;
               const isHidden = item && !!hiddenAyahs?.[item.globalNumber];
               const isEndMarker = w.type === "end";
+              // التلوين الحرفي (النص العادي بخط أميري) يتم فقط على كلمات المصحف
+              // الحقيقية (type === "word"). أي علامة تانية غير الكلمة ونهاية الآية —
+              // زي علامات الوقف (قلى/صلى/م/ج) أو رموز السجدة — نصها الخام مجرد كود
+              // مؤقت (مثلاً حرف Q إنجليزي) مقصود يتحول لشكله المزخرف الصحيح فقط عن
+              // طريق خط المصحف الخاص (w.font)، فتفضل بترسم بنفس طريقة العرض العادي
+              // حتى لو التجويد مفعّل، وإلا ظهرت كحرف إنجليزي خام بدل شكلها الصحيح.
+              const isPlainWord = w.type === "word";
               const tags = item ? (ayahTags?.[item.globalNumber] || []) : [];
               return (
                 <span
-                  key={wi}
+                  key={`${lineNumber}-${wi}`}
                   onClick={() => {
                     if (!item) return;
                     if (isHidden) onToggleHiddenAyah(item);
@@ -1540,10 +1581,10 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
                   title={isHidden ? "اضغطي لإظهار الآية" : undefined}
                   style={{
                     position: "relative",
-                    fontFamily: isEndMarker ? `"${w.font}"` : (tajweedEnabled ? "'Amiri', serif" : `"${w.font}"`),
-                    fontSize: isEndMarker ? Math.max(14, fitFontSize * 0.72) : (tajweedEnabled ? 23 : fitFontSize),
-                    fontWeight: tajweedEnabled && !isEndMarker ? 700 : undefined,
-                    lineHeight: tajweedEnabled && !isEndMarker ? 2.15 : 2.1,
+                    fontFamily: (tajweedEnabled && isPlainWord) ? "'Amiri', serif" : `"${w.font}"`,
+                    fontSize: isEndMarker ? Math.max(14, fitFontSize * 0.72) : fitFontSize,
+                    fontWeight: (tajweedEnabled && isPlainWord) ? 700 : undefined,
+                    lineHeight: (tajweedEnabled && isPlainWord) ? 2.15 : 2.1,
                     cursor: item ? "pointer" : "default",
                     // رقم نهاية الآية يفضل ظاهر دايمًا حتى لو الآية مخفية — الإخفاء بيمسح الكلمات بس
                     color: (isHidden && !isEndMarker) ? "transparent" : (nightMode ? "#EBE1C6" : "var(--text)"),
@@ -1551,10 +1592,10 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
                     borderRadius: 3,
                   }}
                 >
-                  {tajweedEnabled && !isEndMarker ? (
+                  {tajweedEnabled && isPlainWord ? (
                     <>
-                      {tajweedSpansForWord(w, line.line, wi, item)?.map((span, spanIndex) => (
-                        <span key={spanIndex} style={span.color ? { color: span.color } : undefined}>{span.text}</span>
+                      {tajweedSpansForWord(w, lineNumber, wi, item)?.map((span, spanIndex) => (
+                        <span key={spanIndex} style={(span.color && !isHidden) ? { color: span.color } : undefined}>{span.text}</span>
                       ))}
                       {" "}
                     </>
@@ -3235,19 +3276,6 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             الحزب {hizbForGlobal(pgStart)}
           </span>
         </div>
-        {prefs.tajweedColoringEnabled && (
-          <div style={{ margin: "0 4px 12px", padding: 12, borderRadius: 10, background: "var(--accentSoft)", border: "1px solid var(--border)" }}>
-            <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>🖍️ مفتاح ألوان أحكام التجويد</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px 10px" }}>
-              {TAJWEED_LEGEND.map((l, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 10.5, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>{l.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
         <div
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
@@ -3855,7 +3883,21 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             </div>
           )}
         </div>
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: -14, position: "relative", zIndex: 2 }}>
+        {prefs.tajweedColoringEnabled && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, overflowX: "auto", whiteSpace: "nowrap",
+            margin: "6px 2px 0", padding: "4px 6px", borderTop: `1px solid ${nightMode ? "#2a2718" : "var(--border)"}`,
+            scrollbarWidth: "none",
+          }}>
+            {TAJWEED_LEGEND.map((l, i) => (
+              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 8.5, fontWeight: 400, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>{l.short}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: prefs.tajweedColoringEnabled ? 6 : -14, position: "relative", zIndex: 2 }}>
           <button onClick={() => changeMushafPage("prev")} disabled={mushafPage <= 1} aria-label="الصفحة السابقة" style={{ ...circleBtn(), width: 30, height: 30, opacity: mushafPage <= 1 ? 0.35 : 1 }}><ChevronRight size={16} /></button>
           <span style={{
             background: nightMode ? "#1a160e" : "var(--accentSoft)", border: `1px solid ${nightMode ? "#3a3627" : "var(--accent)"}`,
@@ -8453,6 +8495,7 @@ const NAV_ITEMS = [
   { id: "quran", labelKey: "quran", icon: BookOpen, views: ["quran", "listen"] },
   { id: "prayerTimes", labelKey: "prayerTimes", icon: Clock, views: ["prayerTimes"] },
   { id: "ibadah", labelKey: "ibadah", icon: Compass, views: ["ibadah", "adhkar"] },
+  { id: "home", labelKey: "home", icon: HomeIcon, views: ["home"] },
   { id: "learn", labelKey: "learn", icon: GraduationCap, views: ["learn", "hadith", "ai"] },
   { id: "journey", labelKey: "journey", icon: Target, views: ["journey"] },
   { id: "settings", labelKey: "settings", icon: SettingsIcon, views: ["settings"] },
@@ -9384,12 +9427,12 @@ export default function App() {
       {!state.onboarded && <Onboarding onFinish={finishOnboarding} />}
 
       <div className="unisk-mobile-topbar" style={{
-        // إضافة مسافة أمان فوق (safe-area-inset-top) حتى لا يتغطى زر "أنيسك" بمنطقة
-        // الإشعارات/الكاميرا الأمامية في شاشات الموبايل ويظل قابلًا للضغط دايمًا.
-        alignItems: "center", justifyContent: "flex-end", position: "relative",
+        // إضافة مسافة أمان فوق (safe-area-inset-top) حتى ماحدش من عناصر الشريط
+        // يتغطى بمنطقة الإشعارات/الكاميرا الأمامية في شاشات الموبايل.
+        alignItems: "center", justifyContent: "space-between", position: "relative",
         padding: "calc(14px + env(safe-area-inset-top)) 18px 0", maxWidth: 480, margin: "0 auto",
       }}>
-        <button onClick={() => setView("home")} aria-label="العودة إلى الرئيسية" title="العودة إلى الرئيسية" style={{ position: "absolute", left: "50%", top: "calc(14px + env(safe-area-inset-top))", transform: "translateX(-50%)", border: "none", background: "transparent", padding: "3px 10px", cursor: "pointer", fontFamily: "'Reem Kufi', sans-serif", fontSize: 18, color: "var(--primary)", fontWeight: 700, lineHeight: 1, zIndex: 5 }}>{tr("appName")}</button>
+        <span style={{ fontFamily: "'Reem Kufi', sans-serif", fontSize: 18, color: "var(--primary)", fontWeight: 700, lineHeight: 1 }}>{tr("appName")}</span>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setView("journey")} style={iconBtn()}><Target size={17} color={view === "journey" ? "var(--primary)" : "var(--textDim)"} /></button>
           <button onClick={() => setView("settings")} style={iconBtn()}><SettingsIcon size={17} color={view === "settings" ? "var(--primary)" : "var(--textDim)"} /></button>
