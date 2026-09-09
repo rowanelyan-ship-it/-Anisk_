@@ -3297,20 +3297,22 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             opacity: flip ? 0.35 : 1, transition: "transform .26s ease, opacity .26s ease", transformOrigin: flip === "next" ? "right" : "left",
             boxShadow: flip ? (flip === "next" ? "-18px 0 30px -20px rgba(0,0,0,0.35)" : "18px 0 30px -20px rgba(0,0,0,0.35)") : "none",
           }}>
-            <div style={{ textAlign: "center", marginBottom: 10 }}>
-              {!prefs.tajweedColoringEnabled ? (
-                <span
-                  title="مصحف المدينة النبوية — بيتجهّز في الخلفية عشان يشتغل بدون نت"
-                  style={{ fontSize: 10, color: nightMode ? "#5f5c4d" : "#b7ac8f", fontFamily: "'Cairo', sans-serif" }}
-                >
-                  {offlineDownload.status === "downloading" ? `⏳ بيتجهّز للقراءة بدون نت… ${offlineDownload.done}/${offlineDownload.total}` : ""}
-                </span>
-              ) : (
-                <span style={{ fontSize: 10.5, color: nightMode ? "#8f8a72" : "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>
-                  مصحف عثماني ملوّن بأحكام التجويد
-                </span>
-              )}
-            </div>
+            {(prefs.tajweedColoringEnabled || offlineDownload.status === "downloading") && (
+              <div style={{ textAlign: "center", marginBottom: 10 }}>
+                {!prefs.tajweedColoringEnabled ? (
+                  <span
+                    title="مصحف المدينة النبوية — بيتجهّز في الخلفية عشان يشتغل بدون نت"
+                    style={{ fontSize: 10, color: nightMode ? "#5f5c4d" : "#b7ac8f", fontFamily: "'Cairo', sans-serif" }}
+                  >
+                    {`⏳ بيتجهّز للقراءة بدون نت… ${offlineDownload.done}/${offlineDownload.total}`}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 10.5, color: nightMode ? "#8f8a72" : "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>
+                    مصحف عثماني ملوّن بأحكام التجويد
+                  </span>
+                )}
+              </div>
+            )}
             {true ? (
               <MushafRealPage
                 pageNum={mushafPage}
@@ -4624,10 +4626,6 @@ function ListenHub({ quran, prefs, updatePrefs, goTo }) {
 
   const toggleRadio = (forceSource) => {
     if (radioPlaying && !forceSource) { radioRef.current.pause(); setRadioPlaying(false); setRadioStatus("idle"); ANISK_LISTEN_SESSION.radioPlaying = false; ANISK_LISTEN_SESSION.radioStatus = "idle"; return; }
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      setRadioStatus("offline");
-      return;
-    }
     audioRef.current?.pause();
     radioRef.current?.pause();
     setRadioStatus("loading");
