@@ -3,7 +3,7 @@ import {
   Home as HomeIcon, BookOpen, Sparkles, Settings as SettingsIcon, Compass, Moon, Sun, Laptop,
   ChevronRight, ChevronLeft, Play, Pause, SkipBack, SkipForward, Volume2, Repeat,
   Mic, X, Check, Circle, CheckCircle2, Bookmark, HandHeart, GraduationCap, Flame,
-  Target, User, ListMusic, Gauge, Sunrise, Sunset, Star, Heart, Brain, RotateCcw, Pin, ArrowLeft, ArrowRight,
+  Target, User, ListMusic, Gauge, Sunrise, Sunset, Star, ArrowLeft, ArrowRight,
   ChevronDown, Info, Youtube, Clock, Languages, MapPin, Music, EyeOff, Download, BookMarked
 } from "lucide-react";
 
@@ -1186,6 +1186,8 @@ const QCF_FONT_CDN = "https://cdn.jsdelivr.net/gh/MohamadHajjRabee/quran-qcf4@ma
 const LOCAL_MUSHAF_BASE = "/mushaf";
 const QCF_CACHE_NAME = "mushaf-qcf4-v1";
 const QCF_TOTAL_PAGES = 604;
+// رموز كلمات البسملة نفسها في أول آية من الفاتحة، من دون رمز رقم الآية.
+const FATIHA_BISMILLAH_CODES = [61696, 61697, 61698, 61699];
 const QCF_FONT_NAMES = [
   ...Array.from({ length: 47 }, (_, i) => `QCF4_Hafs_${String(i + 1).padStart(2, "0")}`),
   "QCF4_QBSML",
@@ -1349,30 +1351,7 @@ async function downloadFullMushafOffline(onProgress) {
 // الإطار — فمفيش سطر ممكن يتقص أبدًا مهما كان طويل. وارتفاع الصفحة بقى بيتغيّر
 // حسب عدد أسطرها الحقيقي (مش رقم ثابت ١٥ سطر دايمًا)، فصفحة الفاتحة القصيرة
 // مبقاش فيها فراغ كبير تحت من غير داعٍ.
-// البسملة الأصلية في QCF4 — نفس الجليف المستخدم في مصحف المدينة داخل الصفحة،
-// بدون إعادة تشكيل أو bidi، لذلك تظهر من اليمين لليسار كقطعة واحدة نظيفة.
-// البسملة تُؤخذ من بيانات صفحة QCF4 نفسها، وليس من نص عربي يُعاد تشكيله
-// بالمتصفح. ده مهم جدًا لأن الجليف الموجود في بيانات المصحف هو نفس الشكل
-// المستخدم داخل الصفحة، وكونه حرفًا واحدًا يمنع قلب الكلمات أو "الشخبطة".
-function MushafBismillah({ word, nightMode, fontSize = 26 }) {
-  if (!word) return null;
-  return (
-    <div dir="rtl" aria-label="بسم الله الرحمن الرحيم" style={{
-      width: "100%", minHeight: fontSize * 1.9, display: "flex", alignItems: "center", justifyContent: "center",
-      margin: "4px 0 9px", overflow: "visible", position: "relative", direction: "rtl",
-    }}>
-      <span style={{
-        fontFamily: `"${word.font}"`, fontSize, lineHeight: 1.5,
-        color: nightMode ? "#EBE1C6" : "var(--text)", direction: "rtl", unicodeBidi: "normal",
-        whiteSpace: "nowrap", display: "block",
-      }}>
-        {word.char || String.fromCharCode(word.code)}
-      </span>
-    </div>
-  );
-}
-
-function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTags, hiddenAyahs, onToggleHiddenAyah, nightMode, onError }) {
+function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTags, hiddenAyahs, onToggleHiddenAyah, nightMode, tajweedEnabled = false, tajweedData = {}, onError }) {
   const [pageData, setPageData] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [fitFontSize, setFitFontSize] = useState(26);
@@ -1405,8 +1384,8 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
         const data = await fetchMushafPageQCF(pageNum);
         const fonts = new Set();
         data.lines.forEach((l) => l.words.forEach((w) => fonts.add(w.font)));
-        // كل سطر في بيانات QCF4 يحمل الخط الصحيح للجليف الذي سيُرسم.
-        // لا نستبدل البسملة بخط/حرف مُنشأ يدويًا.
+        // نحتاج خط البسملة المزخرف في كل صفحة تبدأ بسورة جديدة.
+        if (data.lines.some((l) => l.words.some((w) => w.type === "bismillah"))) fonts.add("QCF4_QBSML");
         await ensureMushafFontsLoaded(fonts); // منعرضش أي كلمة قبل ما الخط يبقى جاهز فعلًا
         if (document.fonts && document.fonts.ready) await document.fonts.ready; // تأكيد إضافي إن كل الخطوط استقرت قبل القياس
 
@@ -1465,6 +1444,29 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
     return pageItems.find((it) => it.surahId === sId && it.localIndex === ayahNum - 1) || null;
   };
 
+  // كل كلمة في ملف صفحة المدينة مربوطة بالآية وبترتيبها فيها؛ نستخرج موضعها
+  // كي نلوّن الحروف الصحيحة من بيانات التجويد من غير أن نغيّر تقسيم الأسطر.
+  const tajweedWordOffsets = {};
+  const verseOffsets = {};
+  pageData.lines.forEach((line) => line.words.forEach((word, wordIndex) => {
+    if (word.type !== "word" || !word.verse_key) return;
+    const key = `${line.line}:${wordIndex}`;
+    const start = verseOffsets[word.verse_key] || 0;
+    tajweedWordOffsets[key] = start;
+    verseOffsets[word.verse_key] = start + Array.from(word.text || "").length + 1;
+  }));
+
+  const tajweedSpansForWord = (word, lineNumber, wordIndex, item) => {
+    if (!tajweedEnabled || !item) return null;
+    const entry = (tajweedData[item.surahId] || []).find((e) => e.ayah === item.localIndex + 1);
+    const wordStart = tajweedWordOffsets[`${lineNumber}:${wordIndex}`] || 0;
+    const wordEnd = wordStart + Array.from(word.text || "").length;
+    const annotations = (entry?.annotations || [])
+      .filter((annotation) => annotation.start < wordEnd && annotation.end > wordStart)
+      .map((annotation) => ({ ...annotation, start: annotation.start - wordStart, end: annotation.end - wordStart }));
+    return buildTajweedSpans(word.text || "", annotations);
+  };
+
   const hiddenMarksFor = (text) => {
     // نحتسب الحروف فقط (لا التشكيل أو علامة نهاية الآية)، ثم نرسم شرطات
     // بعددها؛ ويبقى عرض كلمة المصحف الأصلي في مكانه تمامًا.
@@ -1502,18 +1504,25 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
           );
         }
 
-        // البسملة لكل سورة ما عدا الفاتحة والتوبة — جليف واحد ثابت من نفس خط المصحف،
-        // مع اتجاه RTL طبيعي ومن غير bidi-override حتى لا يحدث قلب/شخبطة في المتصفح.
+        // البسملة (لغير الفاتحة) — سطر عادي في النص، بدون صندوق، زي المطبوع بالظبط
         if (specialType === "bismillah") {
-          const bismillahWord = line.words.find((w) => w.type === "bismillah");
-          const surahNumber = bismillahWord?.sura;
-          // الفاتحة لا تحتوي على سطر بسملة مستقل في بيانات الصفحة، والتوبة أصلًا بلا بسملة.
-          if (surahNumber === 1 || surahNumber === 9) return null;
-          return <MushafBismillah key={line.line} word={bismillahWord} nightMode={nightMode} fontSize={fitFontSize} />;
+          return (
+            <div key={line.line} dir="rtl" style={{
+              // نستخدم رموز آية البسملة من الفاتحة نفسها، بلا رقم آية، حتى تتطابق
+              // مع خط المصحف. وفي الوضع الفاتح يظل لونها أسود كاتم وواضح.
+              margin: "5px 0 9px", minHeight: fitFontSize * 1.7, display: "flex", alignItems: "center", justifyContent: "center",
+              // نفس قواعد اتجاه سطور المصحف الأصلية؛ العزل (isolate) كان يعكس تسلسل الرموز.
+              direction: "rtl", unicodeBidi: "bidi-override", overflow: "visible", position: "relative", zIndex: 1,
+            }}>
+              <span style={{ fontFamily: "'QCF4_Hafs_01'", fontSize: Math.min(35, fitFontSize + 6), fontWeight: 700, color: nightMode ? "#F4E9CB" : "#090909", lineHeight: 1.45, display: "block", direction: "rtl", unicodeBidi: "bidi-override" }}>
+                {FATIHA_BISMILLAH_CODES.map((code) => String.fromCharCode(code)).join("")}
+              </span>
+            </div>
+          );
         }
 
         return (
-          <div key={line.line} dir="rtl" style={{ textAlign: "center", direction: "rtl", unicodeBidi: "bidi-override", overflow: "hidden" }}>
+          <div key={line.line} dir="rtl" style={{ textAlign: "center", direction: "rtl", unicodeBidi: "bidi-override", overflow: "visible" }}>
             {line.words.map((w, wi) => {
               const item = findItem(w.verse_key);
               const isMarked = item && markedAyah?.globalNumber === item.globalNumber;
@@ -1530,7 +1539,11 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
                   }}
                   title={isHidden ? "اضغطي لإظهار الآية" : undefined}
                   style={{
-                    position: "relative", fontFamily: `"${w.font}"`, fontSize: fitFontSize, lineHeight: 2.1,
+                    position: "relative",
+                    fontFamily: isEndMarker ? `"${w.font}"` : (tajweedEnabled ? "'Amiri', serif" : `"${w.font}"`),
+                    fontSize: isEndMarker ? Math.max(14, fitFontSize * 0.72) : (tajweedEnabled ? 23 : fitFontSize),
+                    fontWeight: tajweedEnabled && !isEndMarker ? 700 : undefined,
+                    lineHeight: tajweedEnabled && !isEndMarker ? 2.15 : 2.1,
                     cursor: item ? "pointer" : "default",
                     // رقم نهاية الآية يفضل ظاهر دايمًا حتى لو الآية مخفية — الإخفاء بيمسح الكلمات بس
                     color: (isHidden && !isEndMarker) ? "transparent" : (nightMode ? "#EBE1C6" : "var(--text)"),
@@ -1538,7 +1551,14 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
                     borderRadius: 3,
                   }}
                 >
-                  {String.fromCharCode(w.code)}
+                  {tajweedEnabled && !isEndMarker ? (
+                    <>
+                      {tajweedSpansForWord(w, line.line, wi, item)?.map((span, spanIndex) => (
+                        <span key={spanIndex} style={span.color ? { color: span.color } : undefined}>{span.text}</span>
+                      ))}
+                      {" "}
+                    </>
+                  ) : String.fromCharCode(w.code)}
                   {isHidden && w.type === "word" && (
                     <span aria-hidden="true" style={{
                       position: "absolute", insetInline: 1, top: "53%", overflow: "hidden",
@@ -1560,15 +1580,12 @@ function MushafRealPage({ pageNum, pageItems, onOpenAyahMenu, markedAyah, ayahTa
                       aria-label={`علامات الآية: ${tags.map((tagId) => AYAH_TAG_TYPES.find((tag) => tag.id === tagId)?.label).filter(Boolean).join("، ")}`}
                       title={tags.map((tagId) => AYAH_TAG_TYPES.find((tag) => tag.id === tagId)?.label).filter(Boolean).join(" · ")}
                       style={{
-                        position: "absolute", top: -13, insetInlineEnd: -5, display: "inline-flex", alignItems: "center",
-                        gap: 1, padding: "2px 3px", borderRadius: 7,
-                        background: nightMode ? "rgba(16,13,7,.92)" : "rgba(255,255,255,.94)",
-                        border: `1px solid ${nightMode ? "rgba(201,166,107,.34)" : "rgba(176,141,87,.24)"}`,
-                        lineHeight: 1, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 3,
-                        boxShadow: "0 2px 5px rgba(0,0,0,.10)",
+                        position: "absolute", top: -11, insetInlineEnd: -10, display: "inline-flex", alignItems: "center",
+                        gap: 1, padding: "1px 2px", borderRadius: 8, background: nightMode ? "rgba(16,13,7,.84)" : "rgba(255,255,255,.82)",
+                        fontFamily: "sans-serif", fontSize: 9, lineHeight: 1, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 2,
                       }}
                     >
-                      {tags.map((tagId) => <AyahTagIcon key={tagId} type={tagId} size={10} />)}
+                      {tags.map((tagId) => AYAH_TAG_TYPES.find((tag) => tag.id === tagId)?.icon).filter(Boolean).join("")}
                     </span>
                   )}
                 </span>
@@ -2818,7 +2835,9 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
     if (touchStartX.current == null) return;
     const delta = e.changedTouches[0].clientX - touchStartX.current;
     touchStartX.current = null;
-    if (Math.abs(delta) < 40) return;
+    // رفعنا حد اللمس المطلوب لتقليب الصفحة (كان 40px) عشان مش تتقلب الصفحة بمجرد
+    // لمسة بسيطة أو تمرير خفيف أثناء القراءة، ولازم سحب واضح ومقصود.
+    if (Math.abs(delta) < 110) return;
     // سحب من الشمال لليمين (delta > 0) = الصفحة التالية، والعكس = السابقة
     if (delta > 0) changeMushafPage("next"); else changeMushafPage("prev");
   };
@@ -2828,7 +2847,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
     if (touchStartX.current == null) return;
     const delta = e.clientX - touchStartX.current;
     touchStartX.current = null;
-    if (Math.abs(delta) < 60) return;
+    if (Math.abs(delta) < 110) return;
     if (delta > 0) changeMushafPage("next"); else changeMushafPage("prev");
   };
 
@@ -3216,6 +3235,19 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             الحزب {hizbForGlobal(pgStart)}
           </span>
         </div>
+        {prefs.tajweedColoringEnabled && (
+          <div style={{ margin: "0 4px 12px", padding: 12, borderRadius: 10, background: "var(--accentSoft)", border: "1px solid var(--border)" }}>
+            <div style={{ fontFamily: "'Cairo', sans-serif", fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>🖍️ مفتاح ألوان أحكام التجويد</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px 10px" }}>
+              {TAJWEED_LEGEND.map((l, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 12, height: 12, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 10.5, color: "var(--textDim)", fontFamily: "'Cairo', sans-serif" }}>{l.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
@@ -3238,7 +3270,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             boxShadow: flip ? (flip === "next" ? "-18px 0 30px -20px rgba(0,0,0,0.35)" : "18px 0 30px -20px rgba(0,0,0,0.35)") : "none",
           }}>
             <div style={{ textAlign: "center", marginBottom: 10 }}>
-              {realMushafMode ? (
+              {!prefs.tajweedColoringEnabled ? (
                 <span
                   title="مصحف المدينة النبوية — بيتجهّز في الخلفية عشان يشتغل بدون نت"
                   style={{ fontSize: 10, color: nightMode ? "#5f5c4d" : "#b7ac8f", fontFamily: "'Cairo', sans-serif" }}
@@ -3251,8 +3283,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                 </span>
               )}
             </div>
-
-            {realMushafMode ? (
+            {true ? (
               <MushafRealPage
                 pageNum={mushafPage}
                 pageItems={pageItems}
@@ -3261,6 +3292,8 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                 hiddenAyahs={hiddenAyahs}
                 onToggleHiddenAyah={toggleHiddenAyah}
                 nightMode={nightMode}
+                tajweedEnabled={prefs.tajweedColoringEnabled}
+                tajweedData={tajweedData}
                 onOpenAyahMenu={(item) => setAyahMenu({ item, mode: "menu" })}
               />
             ) : (
@@ -3436,7 +3469,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                             title="اضغطي لتعديل علامات هذه الآية"
                             style={{ display: "inline-flex", verticalAlign: "middle", margin: "0 2px", cursor: "pointer", fontSize: 12 }}
                           >
-                            {ayahTags[g].map((tid) => <AyahTagIcon key={tid} type={tid} size={11} />)}
+                            {ayahTags[g].map((tid) => AYAH_TAG_TYPES.find((t) => t.id === tid)?.icon).join("")}
                           </span>
                         )}
                         {"  "}
@@ -3500,7 +3533,17 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                   { label: "استماع", icon: "🔊", angle: -90, action: () => { const it = ayahMenu.item; setListenSetup({ item: it, fromAyah: it.localIndex + 1, toAyah: it.localIndex + 1 }); setAyahMenu(null); } },
                   { label: "التفسير", icon: "📖", angle: -45, action: () => { loadTafsir(ayahMenu.item, "tafsir"); setAyahMenu(null); } },
                   { label: "معاني الكلمات", icon: "🔤", angle: 0, action: () => { loadTafsir(ayahMenu.item, "words"); setAyahMenu(null); } },
-                  { label: "إخفاء الآيات", icon: <EyeOff size={17} strokeWidth={1.75} />, angle: 45, action: () => { const it = ayahMenu.item; setHideSetup({ item: it, fromAyah: it.localIndex + 1, toAyah: it.localIndex + 1 }); setAyahMenu(null); } },
+                  {
+                    label: hiddenAyahs[ayahMenu.item.globalNumber] ? "إظهار الآية" : "إخفاء الآيات",
+                    icon: <EyeOff size={17} strokeWidth={1.75} />,
+                    angle: 45,
+                    action: () => {
+                      const it = ayahMenu.item;
+                      if (hiddenAyahs[it.globalNumber]) toggleHiddenAyah(it);
+                      else setHideSetup({ item: it, fromAyah: it.localIndex + 1, toAyah: it.localIndex + 1 });
+                      setAyahMenu(null);
+                    },
+                  },
                   {
                     label: markedAyah?.globalNumber === ayahMenu.item.globalNumber ? "إلغاء العلامة" : "علّمي هنا",
                     icon: <Bookmark size={17} strokeWidth={1.75} fill={markedAyah?.globalNumber === ayahMenu.item.globalNumber ? "currentColor" : "none"} />,
@@ -3622,7 +3665,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
                   return (
                     <button
                       key={t.id}
-                      onClick={() => toggleAyahTag(tagSetup.item.globalNumber, t.id)}
+                      onClick={() => { toggleAyahTag(tagSetup.item.globalNumber, t.id); setTagSetup(null); }}
                       style={{
                         padding: "8px 12px", borderRadius: 12, cursor: "pointer",
                         border: `1px solid ${active ? "transparent" : "var(--border)"}`,
@@ -3812,29 +3855,8 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
             </div>
           )}
         </div>
-        {prefs.tajweedColoringEnabled && (
-          <div dir="rtl" style={{
-            margin: "8px 2px 0", padding: "5px 7px", borderRadius: 8,
-            background: nightMode ? "rgba(201,166,107,.045)" : "rgba(176,141,87,.045)",
-            border: `1px solid ${nightMode ? "rgba(201,166,107,.16)" : "rgba(176,141,87,.16)"}`,
-            overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch",
-          }}>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 7, minWidth: "max-content",
-              fontFamily: "'Cairo', sans-serif", color: "var(--textDim)",
-            }}>
-              <span style={{ fontSize: 9, fontWeight: 800, flexShrink: 0 }}>🖍️ التجويد</span>
-              <span style={{ width: 1, height: 13, background: "currentColor", opacity: .18, flexShrink: 0 }} />
-              {TAJWEED_LEGEND.map((l, i) => (
-                <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 8.5, whiteSpace: "nowrap", flexShrink: 0 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
-                  {l.label}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-        <div style={{ display: "flex", justifyContent: "center", marginTop: -14, position: "relative", zIndex: 2 }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: -14, position: "relative", zIndex: 2 }}>
+          <button onClick={() => changeMushafPage("prev")} disabled={mushafPage <= 1} aria-label="الصفحة السابقة" style={{ ...circleBtn(), width: 30, height: 30, opacity: mushafPage <= 1 ? 0.35 : 1 }}><ChevronRight size={16} /></button>
           <span style={{
             background: nightMode ? "#1a160e" : "var(--accentSoft)", border: `1px solid ${nightMode ? "#3a3627" : "var(--accent)"}`,
             borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
@@ -3843,17 +3865,27 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
           }}>
             {mushafPage}
           </span>
+          <button onClick={() => changeMushafPage("next")} disabled={mushafPage >= 604} aria-label="الصفحة التالية" style={{ ...circleBtn(), width: 30, height: 30, opacity: mushafPage >= 604 ? 0.35 : 1 }}><ChevronLeft size={16} /></button>
         </div>
         <p style={{ textAlign: "center", fontSize: 11, color: "var(--textDim)", marginTop: 8, fontFamily: "'Cairo', sans-serif" }}>
-          {g(prefs.gender, "اضغطي على رقم الآية لفتح الخيارات الدائرية. اسحبِي يمينًا أو شمالًا لتقليب الصفحة.", "اضغطي على رقم الآية لفتح الخيارات الدائرية. اسحبِي يمينًا أو شمالًا لتقليب الصفحة.")}
+          {g(prefs.gender, "اضغطي على رقم الآية لفتح الخيارات الدائرية. استخدمي السهمين أو اسحبي لتقليب الصفحة.", "اضغطي على رقم الآية لفتح الخيارات الدائرية. استخدمي السهمين أو اسحبي لتقليب الصفحة.")}
         </p>
 
         <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
           <button onClick={() => audio.toggle({ id: firstItemSurahId, name: surahForGlobal(pgStart).name })} style={{ ...btnGhost(), flex: 1, justifyContent: "center" }}>
             {audioSurahOnPage ? <Pause size={15} /> : <Play size={15} />} {audioSurahOnPage ? "إيقاف" : "استماع"}
           </button>
-          <button onClick={() => setHideSetup({ item: pageItems[0], fromAyah: pageItems[0]?.localIndex + 1 || 1, toAyah: pageItems[0]?.localIndex + 1 || 1 })} style={{ ...btnGhost(), flex: 1, justifyContent: "center" }}>
-            <EyeOff size={15} strokeWidth={1.75} /> إخفاء الآيات
+          <button onClick={() => {
+            const hiddenOnPage = pageItems.filter((item) => hiddenAyahs[item.globalNumber]);
+            if (hiddenOnPage.length) {
+              const next = { ...hiddenAyahs };
+              hiddenOnPage.forEach((item) => delete next[item.globalNumber]);
+              setHiddenAyahs(next); saveHiddenAyahs(next);
+            } else {
+              setHideSetup({ item: pageItems[0], fromAyah: pageItems[0]?.localIndex + 1 || 1, toAyah: pageItems[0]?.localIndex + 1 || 1 });
+            }
+          }} style={{ ...btnGhost(), flex: 1, justifyContent: "center" }}>
+            <EyeOff size={15} strokeWidth={1.75} /> {pageItems.some((item) => hiddenAyahs[item.globalNumber]) ? "إظهار آيات الصفحة" : "إخفاء الآيات"}
           </button>
           <button
             onClick={() => (recitationRange ? stopRecitation() : setRecitationSetup({ surahId: firstItemSurahId, fromAyah: pageItems[0] ? pageItems[0].localIndex + 1 : 1, toAyah: pageItems[0] ? pageItems[0].localIndex + 1 : 1 }))}
@@ -4075,7 +4107,7 @@ function QuranSection({ prefs, updatePrefs, day, updateDay, nightMode, setNightM
         </div>
         {prefs.tajweedColoringEnabled && (
           <p style={{ fontSize: 11, color: "var(--textDim)", lineHeight: 1.7, margin: "10px 0 0" }}>
-            أول مرة تفتحي فيها آية، هيتحمّل ملف الأحكام لسورتها من مصدر خارجي (يحتاج نت أول مرة بس لكل سورة). مفتاح الألوان هتلاقيه في أول صفحة من المصحف.
+            أول مرة تفتحي فيها آية، هيتحمّل ملف الأحكام لسورتها من مصدر خارجي (يحتاج نت أول مرة بس لكل سورة). مفتاح الألوان ظاهر أعلى إطار المصحف، وليس داخله.
             <br /><br />
             عند تفعيل التجويد، تتحول شاشة القراءة تلقائيًا إلى النص العثماني الملوّن داخل إطار المصحف نفسه؛ وعند إيقافه يعود مصحف المدينة بخطه الأصلي.
           </p>
@@ -5276,23 +5308,12 @@ async function saveMarkedAyah(mark) {
 // وبيتشال تلقائيًا؛ العلامات دي تصنيفية وبتفضل زي ما هي، وممكن الآية الواحدة
 // تاخد أكتر من علامة في نفس الوقت (زي "أحبها" و"للحفظ" مع بعض).
 const AYAH_TAG_TYPES = [
-  { id: "important", label: "آية مهمة", icon: "star", color: "#C99A2E" },
-  { id: "loved", label: "آية أحبها", icon: "heart", color: "#E53935" },
-  { id: "memorize", label: "آية للحفظ", icon: "brain", color: "#7B61A8" },
-  { id: "review", label: "آية للمراجعة", icon: "review", color: "#3E7C59" },
-  { id: "revisit", label: "أريد الرجوع إليها", icon: "pin", color: "#B07A2A" },
+  { id: "important", label: "آية مهمة", icon: "⭐" },
+  { id: "loved", label: "آية أحبها", icon: "❤️" },
+  { id: "memorize", label: "آية للحفظ", icon: "🧠" },
+  { id: "review", label: "آية للمراجعة", icon: "🔁" },
+  { id: "revisit", label: "أريد الرجوع إليها", icon: "📌" },
 ];
-
-function AyahTagIcon({ type, size = 12 }) {
-  const tag = AYAH_TAG_TYPES.find((t) => t.id === type);
-  if (!tag) return null;
-  const props = { size, strokeWidth: 2, color: tag.color, fill: tag.icon === "heart" ? tag.color : "none" };
-  if (tag.icon === "heart") return <Heart {...props} />;
-  if (tag.icon === "brain") return <Brain {...props} />;
-  if (tag.icon === "review") return <RotateCcw {...props} />;
-  if (tag.icon === "pin") return <Pin {...props} />;
-  return <Star {...props} />;
-}
 async function loadAyahTags() {
   try {
     const res = await window.storage.get("unisk:ayah-tags", false);
@@ -9215,6 +9236,11 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [state, setState] = useState(DEFAULT_STATE);
   const [view, setView] = useState("home");
+  // وضع القراءة الليلي الخاص بصفحة المصحف (أيقونة القمر) كان منفصلًا تمامًا عن
+  // ثيم الابليكيشن العام، فكانت صفحة المصحف تفضل فاتحة (والبسملة سوده) حتى لو
+  // الابليكيشن كله على الوضع الداكن. دلوقتي بيتزامن تلقائيًا مع ثيم الابليكيشن
+  // (شوفي useEffect تحت بعد ما يتحسب resolved)، ولسه ممكن تتحكمي فيه يدويًا من
+  // القمر وقت القراءة نفسها.
   const [nightMode, setNightMode] = useState(false);
   const [fullPlayerOpen, setFullPlayerOpen] = useState(false);
 
@@ -9259,6 +9285,13 @@ export default function App() {
   const effectiveLightTheme = isRamadanNow && !state.disableRamadanTheme ? "ramadan" : state.lightTheme;
   const T = getTokens(resolved, effectiveLightTheme, state.darkTheme);
   const dir = state.lang === "en" ? "ltr" : "rtl";
+
+  // مزامنة وضع القراءة الليلي في صفحة المصحف مع ثيم الابليكيشن العام تلقائيًا؛
+  // كل ما ثيم الابليكيشن يتغيّر (فاتح/داكن) صفحة المصحف تتبعه من غير ما تحتاجي
+  // تدوسي على القمر بنفسك، وبرضه تقدري تبدّليها يدويًا وقت القراءة لو حبيتي.
+  useEffect(() => {
+    setNightMode(resolved === "dark");
+  }, [resolved]);
 
   useEffect(() => {
     (async () => {
@@ -9351,9 +9384,12 @@ export default function App() {
       {!state.onboarded && <Onboarding onFinish={finishOnboarding} />}
 
       <div className="unisk-mobile-topbar" style={{
-        alignItems: "center", justifyContent: "space-between", padding: "14px 18px 0", maxWidth: 480, margin: "0 auto",
+        // إضافة مسافة أمان فوق (safe-area-inset-top) حتى لا يتغطى زر "أنيسك" بمنطقة
+        // الإشعارات/الكاميرا الأمامية في شاشات الموبايل ويظل قابلًا للضغط دايمًا.
+        alignItems: "center", justifyContent: "flex-end", position: "relative",
+        padding: "calc(14px + env(safe-area-inset-top)) 18px 0", maxWidth: 480, margin: "0 auto",
       }}>
-        <button onClick={() => setView("home")} style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "'Reem Kufi', sans-serif", fontSize: 18, color: "var(--primary)" }}>{tr("appName")}</button>
+        <button onClick={() => setView("home")} aria-label="العودة إلى الرئيسية" title="العودة إلى الرئيسية" style={{ position: "absolute", left: "50%", top: "calc(14px + env(safe-area-inset-top))", transform: "translateX(-50%)", border: "none", background: "transparent", padding: "3px 10px", cursor: "pointer", fontFamily: "'Reem Kufi', sans-serif", fontSize: 18, color: "var(--primary)", fontWeight: 700, lineHeight: 1, zIndex: 5 }}>{tr("appName")}</button>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setView("journey")} style={iconBtn()}><Target size={17} color={view === "journey" ? "var(--primary)" : "var(--textDim)"} /></button>
           <button onClick={() => setView("settings")} style={iconBtn()}><SettingsIcon size={17} color={view === "settings" ? "var(--primary)" : "var(--textDim)"} /></button>
